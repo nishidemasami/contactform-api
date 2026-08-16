@@ -43,7 +43,7 @@ pub async fn handler(
     match route(&request) {
         Route::CreateInquiry => create_inquiry(repository, request).await,
 
-        Route::FindInquiry => json_response(
+        Route::FindInquiries => json_response(
             501,
             &ErrorResponse {
                 message: "not implemented".into(),
