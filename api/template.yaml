@@ -34,9 +34,6 @@ Parameters:
     Default: "https://nishidemasami.github.io"
     Description: CORSを許可するオリジン
 
-Conditions:
-  IsRelease: !Equals [!Ref Stage, release]
-
 Globals:
   Function:
     Timeout: 10
@@ -47,7 +44,6 @@ Globals:
     Environment:
       Variables:
         DSQL_ENDPOINT: !Ref DSQLEndpoint
-        AWS_REGION: !Sub "${AWS::Region}"
 
 Resources:
   # API Lambda関数

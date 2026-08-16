@@ -69,6 +69,7 @@ jobs:
         run: |
           docker run --rm \
             -e LIQUIBASE_HUB_MODE=off \
+            -e JAVA_OPTS="-DLAMBDA_ROLE=local -DAWS_ACCOUNT_ID=123456789012" \
             --network host \
             -v "${{ github.workspace }}:/workspace" \
             liquibase/liquibase:4.33.0 \
@@ -78,8 +79,6 @@ jobs:
             --url=jdbc:postgresql://localhost:5432/postgres \
             --username=postgres \
             --password=postgres \
-            -DLAMBDA_ROLE=local \
-            -DAWS_ACCOUNT_ID=123456789012 \
             update
 
       - name: cargo test --all-features -- --include-ignored の実行
