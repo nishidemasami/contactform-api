@@ -88,3 +88,4 @@ jobs:
         run: |
           sam validate --lint --template-file api/template.yaml
           sam validate --lint --template-file db/template.yaml
+          sam validate --lint --template-file retained/template.yaml
