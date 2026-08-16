@@ -72,6 +72,7 @@ AWSのIAM設定、OIDC連携、SSMパラメータ命名規則をまとめる。
 - 必要な権限のみを付与する（IAM Access Analyzerでのログ分析を推奨）
 - リソース名指定（`/<service_name>-*` 等）や Tag 条件指定を活用
 - release環境のリソースにはDelete権限を与えない
+- **Aurora DSQL デプロイ用権限**: CloudFormation 実行ロール (`SAM_DEPLOY_ROLE_ARN`) には、Aurora DSQL サービスリンクロールを作成するため `iam:CreateServiceLinkedRole` (対象: `dsql.amazonaws.com`) の権限が必要です。
 
 ### GitHub Actionsでの利用方法
 
