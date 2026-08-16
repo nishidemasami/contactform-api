@@ -73,7 +73,7 @@ impl InquiryEmail {
     /// ## エラー
     ///
     /// - `InquiryDomainError::EmptyEmail`: メールアドレスが空
-    /// - `InquiryDomainError::InvalidEmail`: メールアドレスが256文字超
+    /// - `InquiryDomainError::EmailTooLong`: メールアドレスが256文字超
     pub fn new(value: impl Into<String>) -> Result<Self, InquiryDomainError> {
         let value: String = value.into();
 
@@ -82,7 +82,7 @@ impl InquiryEmail {
         }
 
         if value.chars().count() > 256 {
-            return Err(InquiryDomainError::InvalidEmail);
+            return Err(InquiryDomainError::EmailTooLong);
         }
 
         Ok(Self(value))
@@ -176,7 +176,7 @@ mod tests {
     fn メールアドレスが257文字以上の場合エラーになる() {
         let value: String = "a".repeat(257);
         let result: Result<InquiryEmail, InquiryDomainError> = InquiryEmail::new(value);
-        assert_eq!(result, Err(InquiryDomainError::InvalidEmail));
+        assert_eq!(result, Err(InquiryDomainError::EmailTooLong));
     }
 
     #[test]

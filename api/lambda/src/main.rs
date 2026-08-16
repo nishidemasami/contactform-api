@@ -208,7 +208,7 @@ mod tests {
             lambda_runtime::Error,
         > = handler(repository, event).await;
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().status_code, 200);
+        assert_eq!(result.unwrap().status_code, 201);
     }
 
     #[tokio::test]

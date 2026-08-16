@@ -56,7 +56,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - dsql:DbConnectAdmin
+                  - dsql:DbConnect
                 Resource: !GetAtt DSQLCluster.ResourceArn
 
   # DSQLエンドポイントをSSM Parameter Storeに保存

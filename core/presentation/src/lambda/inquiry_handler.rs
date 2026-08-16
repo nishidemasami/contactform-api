@@ -95,7 +95,7 @@ async fn create_inquiry(
     let usecase: CreateInquiryUsecase = CreateInquiryUsecase::new(repository);
 
     match usecase.execute(input).await {
-        Ok(output) => json_response(200, &CreateInquiryResponse { id: output.id }),
+        Ok(output) => json_response(201, &CreateInquiryResponse { id: output.id }),
 
         Err(CreateInquiryError::Domain(e)) => {
             tracing::warn!("ドメインバリデーションエラー: {:?}", e);
