@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: contactform-api
+  description: コンタクトフォームAPI
+  license:
+    name: ''
+  version: 0.1.0
+paths:
+  /api/v1/inquiries:
+    get:
+      tags:
+      - Inquiry
+      summary: GET /api/v1/inquiries - 問い合わせ一覧取得（未実装）
+      operationId: find_inquiries_doc
+      responses:
+        '501':
+          description: 未実装
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/inquiry:
+    post:
+      tags:
+      - Inquiry
+      summary: POST /api/v1/inquiry - 問い合わせ作成
+      operationId: create_inquiry_doc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInquiryRequest'
+        required: true
+      responses:
+        '201':
+          description: 問い合わせ作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateInquiryResponse'
+        '400':
+          description: 入力エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 重複エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    CreateInquiryRequest:
+      type: object
+      description: |-
+        問い合わせ作成リクエスト
+
+        ## フィールド
+
+        | フィールド | 型 | 説明 |
+        |---|---|---|
+        | `name` | `String` | 氏名 |
+        | `email` | `String` | 連絡先メールアドレス |
+        | `message` | `String` | 問い合わせ本文 |
+      required:
+      - name
+      - email
+      - message
+      properties:
+        email:
+          type: string
+          description: 連絡先メールアドレス
+        message:
+          type: string
+          description: 問い合わせ本文
+        name:
+          type: string
+          description: 氏名
+    CreateInquiryResponse:
+      type: object
+      description: 問い合わせ作成レスポンス
+      required:
+      - id
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 生成された問い合わせID
+    ErrorResponse:
+      type: object
+      description: エラーレスポンス
+      required:
+      - message
+      properties:
+        message:
+          type: string
+          description: エラーメッセージ
+tags:
+- name: Inquiry
+  description: 問い合わせAPI
