@@ -1,0 +1,24 @@
+[package]
+name = "lambda"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "api-lambda-bootstrap"
+path = "src/main.rs"
+
+[dependencies]
+domain = { path = "../../core/domain" }
+application = { path = "../../core/application" }
+infrastructure = { path = "../../core/infrastructure" }
+presentation = { path = "../../core/presentation" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+lambda_runtime.workspace = true
+sea-orm.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+proptest.workspace = true

@@ -1,0 +1,90 @@
+name: CI Validation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - release
+  pull_request:
+    branches:
+      - main
+      - develop
+      - release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Verify & Validate
+    runs-on: ubuntu-latest
+
+    # We can run a postgres service directly in GitHub Actions
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Install Extra CLI Tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: sea-orm-cli,cargo-tarpaulin
+
+      - name: Check Rust format
+        run: cargo fmt -- --check
+
+      - name: Cargo compilation check
+        run: cargo check --all-targets
+
+      - name: Cargo clippy lint check
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run Liquibase migrations
+        run: |
+          docker run --rm \
+            -e LIQUIBASE_HUB_MODE=off \
+            --network host \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.33.0 \
+            --search-path=/workspace \
+            --changelog-file=db/liquibase/changelog.xml \
+            --contexts=local \
+            --url=jdbc:postgresql://localhost:5432/postgres \
+            --username=postgres \
+            --password=postgres \
+            update
+
+      - name: Run all workspace tests
+        run: cargo test --all-features -- --include-ignored
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: sam validate --lint の実行
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: |
+          sam validate --lint --template-file api/template.yaml
+          sam validate --lint --template-file db/template.yaml
