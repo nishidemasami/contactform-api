@@ -9,7 +9,7 @@ use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
 /// | バリアント | 説明 |
 /// |---|---|
 /// | `CreateInquiry` | `POST /api/v1/inquiry` |
-/// | `FindInquiry` | `GET /api/v1/inquiries` |
+/// | `FindInquiries` | `GET /api/v1/inquiries` |
 /// | `NotFound` | 404 Not Found |
 /// | `MethodNotAllowed` | 405 Method Not Allowed |
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,21 +17,32 @@ pub enum Route {
     /// POST /api/v1/inquiry - 問い合わせ作成
     CreateInquiry,
     /// GET /api/v1/inquiries - 問い合わせ一覧（未実装）
-    FindInquiry,
+    FindInquiries,
     /// 404 Not Found
     NotFound,
     /// 405 Method Not Allowed
     MethodNotAllowed,
 }
 
+/// Option<String> から &str 参照を取得するヘルパートレイト
+pub trait OptionStrExt {
+    fn as_str(&self) -> &str;
+}
+
+impl OptionStrExt for Option<String> {
+    fn as_str(&self) -> &str {
+        self.as_deref().unwrap_or_default()
+    }
+}
+
 /// リクエストをルートに振り分ける
 pub fn route(request: &ApiGatewayV2httpRequest) -> Route {
     let method: &str = request.request_context.http.method.as_str();
-    let path: &str = request.raw_path.as_deref().unwrap_or_default();
+    let path: &str = request.raw_path.as_str();
 
     match (method, path) {
         ("POST", "/api/v1/inquiry") => Route::CreateInquiry,
-        ("GET", "/api/v1/inquiries") => Route::FindInquiry,
+        ("GET", "/api/v1/inquiries") => Route::FindInquiries,
         (_, "/api/v1/inquiry") | (_, "/api/v1/inquiries") => Route::MethodNotAllowed,
         _ => Route::NotFound,
     }
@@ -75,9 +86,9 @@ mod tests {
     }
 
     #[test]
-    fn get_api_v1_inquiries_はfind_inquiryになる() {
+    fn get_api_v1_inquiries_はfind_inquiriesになる() {
         let request: ApiGatewayV2httpRequest = make_request("GET", "/api/v1/inquiries");
-        assert_eq!(route(&request), Route::FindInquiry);
+        assert_eq!(route(&request), Route::FindInquiries);
     }
 
     #[test]

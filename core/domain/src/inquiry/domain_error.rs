@@ -20,7 +20,7 @@ pub enum InquiryDomainError {
     EmptyEmail,
 
     /// メールアドレスが無効（256文字超）
-    #[error("invalid email")]
+    #[error("email is too long")]
     EmailTooLong,
 
     /// 問い合わせ本文が空

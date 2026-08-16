@@ -6,7 +6,7 @@ use utoipa::OpenApi;
 
 use super::{
     request::CreateInquiryRequest,
-    response::{CreateInquiryResponse, ErrorResponse, InquiryResponse},
+    response::{CreateInquiryResponse, ErrorResponse},
 };
 
 /// OpenAPIドキュメント
@@ -15,13 +15,11 @@ use super::{
     paths(
         crate::api::inquiry_paths::create_inquiry_doc,
         crate::api::inquiry_paths::find_inquiries_doc,
-        crate::api::inquiry_paths::find_inquiry_doc,
     ),
     components(
         schemas(
             CreateInquiryRequest,
             CreateInquiryResponse,
-            InquiryResponse,
             ErrorResponse,
         )
     ),
