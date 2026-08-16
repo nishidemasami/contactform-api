@@ -9,7 +9,7 @@ use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
 /// | バリアント | 説明 |
 /// |---|---|
 /// | `CreateInquiry` | `POST /api/v1/inquiry` |
-/// | `FindInquiry` | `GET /api/v1/inquiries` |
+/// | `FindInquiries` | `GET /api/v1/inquiries` |
 /// | `NotFound` | 404 Not Found |
 /// | `MethodNotAllowed` | 405 Method Not Allowed |
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,7 +17,7 @@ pub enum Route {
     /// POST /api/v1/inquiry - 問い合わせ作成
     CreateInquiry,
     /// GET /api/v1/inquiries - 問い合わせ一覧（未実装）
-    FindInquiry,
+    FindInquiries,
     /// 404 Not Found
     NotFound,
     /// 405 Method Not Allowed
@@ -31,7 +31,7 @@ pub fn route(request: &ApiGatewayV2httpRequest) -> Route {
 
     match (method, path) {
         ("POST", "/api/v1/inquiry") => Route::CreateInquiry,
-        ("GET", "/api/v1/inquiries") => Route::FindInquiry,
+        ("GET", "/api/v1/inquiries") => Route::FindInquiries,
         (_, "/api/v1/inquiry") | (_, "/api/v1/inquiries") => Route::MethodNotAllowed,
         _ => Route::NotFound,
     }
@@ -75,9 +75,9 @@ mod tests {
     }
 
     #[test]
-    fn get_api_v1_inquiries_はfind_inquiryになる() {
+    fn get_api_v1_inquiries_はfind_inquiriesになる() {
         let request: ApiGatewayV2httpRequest = make_request("GET", "/api/v1/inquiries");
-        assert_eq!(route(&request), Route::FindInquiry);
+        assert_eq!(route(&request), Route::FindInquiries);
     }
 
     #[test]

@@ -25,6 +25,11 @@ use super::{
             body = ErrorResponse
         ),
         (
+            status = 409,
+            description = "重複エラー",
+            body = ErrorResponse
+        ),
+        (
             status = 500,
             description = "内部エラー",
             body = ErrorResponse

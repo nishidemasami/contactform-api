@@ -80,7 +80,7 @@ jobs:
             --contexts=local \
             --url=jdbc:postgresql://localhost:5432/postgres \
             --username=postgres \
-            --****** \
+            --password=postgres \
             -DLAMBDA_ROLE=local \
             -DAWS_ACCOUNT_ID=123456789012 \
             update
@@ -172,7 +172,7 @@ jobs:
             --contexts="$STAGE" \
             --url="jdbc:postgresql://$DSQL_ENDPOINT/postgres" \
             --username=admin \
-            --****** \
+            --password="$TOKEN" \
             -DLAMBDA_ROLE="$LAMBDA_ROLE" \
             -DAWS_ACCOUNT_ID="$AWS_ACCOUNT_ID" \
             update
