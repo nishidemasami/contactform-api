@@ -25,6 +25,8 @@ permissions:
 jobs:
   validate:
     name: validate
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     services:
       postgres:
