@@ -43,6 +43,7 @@ aws_lambda_events = { version = "1", default-features = false, features = [
   "apigw",
   "builders",
 ] }
+http = "1"
 utoipa = { version = "5", features = ["uuid", "yaml"] }
 rstest = "0.26"
 proptest = "1"

@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  api subsystem - API Gateway HTTP API + Lambda関数
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: contactform-api-public
+    AllowedValues:
+      - contactform-api-public
+    Description: サービス名
+  Stage:
+    Type: String
+    Default: develop
+    AllowedValues:
+      - develop
+      - release
+    Description: デプロイステージ (develop または release)
+  SubSystem:
+    Type: String
+    Default: api
+    AllowedValues:
+      - api
+    Description: サブシステム分類名
+  DbConnectLambdaRole:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: DB（DSQL）アクセス用Lambda実行ロールのARN
+  DSQLEndpoint:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Aurora DSQLクラスターのエンドポイント
+  CORSOrigin:
+    Type: String
+    Default: "https://nishidemasami.github.io"
+    Description: CORSを許可するオリジン
+
+Conditions:
+  IsRelease: !Equals [!Ref Stage, release]
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 128
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        DSQL_ENDPOINT: !Ref DSQLEndpoint
+        AWS_REGION: !Sub "${AWS::Region}"
+
+Resources:
+  # API Lambda関数
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./lambda
+      Handler: api-lambda-bootstrap
+      Role: !Ref DbConnectLambdaRole
+      Events:
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+  # API Gateway HTTP API
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref CORSOrigin
+        AllowHeaders:
+          - Content-Type
+        AllowMethods:
+          - POST
+          - GET
+          - OPTIONS
+
+  # API GatewayのエンドポイントURLをSSM Parameter Storeに保存
+  ApiGatewayDomainParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/ApiGatewayDomain"
+      Type: String
+      Value: !Select [2, !Split ["/", !GetAtt HttpApi.ApiEndpoint]]
+      Description: "API GatewayのエンドポイントURL"
