@@ -44,6 +44,7 @@ Globals:
     Environment:
       Variables:
         DSQL_ENDPOINT: !Ref DSQLEndpoint
+        AWS_REGION: !Sub "${AWS::Region}"
 
 Resources:
   # API Lambda関数
