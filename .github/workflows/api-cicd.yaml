@@ -77,7 +77,7 @@ jobs:
             --contexts=local \
             --url=jdbc:postgresql://localhost:5432/postgres \
             --username=postgres \
-            --****** \
+            --password=postgres \
             -DLAMBDA_ROLE=local \
             -DAWS_ACCOUNT_ID=123456789012 \
             update
