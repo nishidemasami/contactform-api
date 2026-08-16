@@ -1,0 +1,191 @@
+name: frontend CI/CD
+
+on:
+  push:
+    branches:
+      - develop
+      - release
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-cicd.yaml"
+  pull_request:
+    branches:
+      - develop
+      - release
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-cicd.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.jsのセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: pnpmのセットアップ
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 依存関係のインストール
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: sam validate --lint の実行
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: sam validate --lint --template-file frontend/template.yaml
+
+      - name: npx tsc --noEmit の実行
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: pnpm run lint の実行
+        working-directory: frontend
+        run: pnpm run lint
+
+      - name: pnpm test の実行
+        working-directory: frontend
+        run: pnpm test
+
+      - name: pnpm audit の実行
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
+
+  build:
+    name: build
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.jsのセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: pnpmのセットアップ
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 依存関係のインストール
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: フロントエンドのビルド
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Storybookのビルド
+        working-directory: frontend
+        run: pnpm run build-storybook
+
+      - name: TypeDocの生成
+        working-directory: frontend
+        run: pnpm run build:typedoc
+
+      - name: ビルド成果物のアップロード
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-output
+          path: |
+            frontend/out/
+            frontend/storybook-static/
+            frontend/typedoc/
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' &&
+      github.actor != 'github-actions[bot]' &&
+      github.ref == 'refs/heads/develop'
+    environment: develop
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: AWSクレデンシャルの設定
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-3
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: デプロイ情報の設定
+        id: info
+        run: |
+          echo "stage=develop" >> "$GITHUB_OUTPUT"
+          echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
+
+      - name: sam deploy の実行
+        run: |
+          sam deploy \
+            --template-file frontend/template.yaml \
+            --stack-name "${{ steps.info.outputs.service_name }}-frontend-${{ steps.info.outputs.stage }}" \
+            --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
+            --parameter-overrides \
+              ServiceName="${{ steps.info.outputs.service_name }}" \
+              Stage="${{ steps.info.outputs.stage }}" \
+              SecretReferer="${{ secrets.SECRET_REFERER }}" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3
+
+      - name: CloudFormation Output の取得
+        id: stack_info
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name "${{ steps.info.outputs.service_name }}-frontend-${{ steps.info.outputs.stage }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendCloudFrontDistributionId'].OutputValue" \
+            --output text)
+          echo "distribution_id=$DISTRIBUTION_ID" >> "$GITHUB_OUTPUT"
+
+          FRONTEND_BUCKET_NAME=$(aws ssm get-parameter \
+            --name "/${{ steps.info.outputs.stage }}/${{ steps.info.outputs.service_name }}/retained/FrontendBucketName" \
+            --query 'Parameter.Value' \
+            --output text)
+          echo "frontend_bucket_name=$FRONTEND_BUCKET_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: アーティファクトのダウンロード
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-output
+          path: frontend-output
+
+      - name: S3へのアップロード
+        run: |
+          aws s3 sync frontend-output/out/ s3://${{ steps.stack_info.outputs.frontend_bucket_name }}/ --delete
+
+      - name: CloudFrontのキャッシュ削除
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.stack_info.outputs.distribution_id }} \
+            --paths "/*"

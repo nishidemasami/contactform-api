@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  review subsystem - レビュー資料配信用CloudFront（developのみ）
+
+Parameters:
+  ServiceName:
+    Type: String
+    Description: サービス名
+  Stage:
+    Type: String
+    AllowedValues:
+      - develop
+      - release
+    Description: デプロイステージ
+  SecretReferer:
+    Type: String
+    NoEcho: true
+    Description: シークレットトークン
+  SubSystem:
+    Type: String
+    Default: review
+    AllowedValues:
+      - review
+    Description: サブシステム分類名
+  ReviewBucketName:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /develop/contactform-api-public/retained/ReviewBucketName
+    Description: "SSM Parameter Path for ReviewBucketName"
+  ReviewWebsiteURL:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /develop/contactform-api-public/retained/ReviewWebsiteURL
+    Description: "SSM Parameter Path for ReviewWebsiteURL"
+
+Conditions:
+  IsRelease: !Equals [!Ref Stage, release]
+
+Resources:
+  ReviewCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DeletionPolicy: !If [IsRelease, Retain, Delete]
+    UpdateReplacePolicy: !If [IsRelease, Retain, Delete]
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2and3
+        DefaultRootObject: index.html
+        Origins:
+          - Id: ReviewS3WebsiteOrigin
+            DomainName: !Ref ReviewWebsiteURL
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+            OriginCustomHeaders:
+              - HeaderName: "Referer"
+                HeaderValue: !Ref SecretReferer
+        DefaultCacheBehavior:
+          TargetOriginId: ReviewS3WebsiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          Compress: true
+        PriceClass: PriceClass_200
+
+Outputs:
+  ServiceSubSystem:
+    Description: Service and subsystem identifier
+    Value: !Sub "${ServiceName}-${SubSystem}"
+  ReviewBucketName:
+    Description: Review docs bucket name
+    Value: !Ref ReviewBucketName
+  CloudFrontDomainName:
+    Description: CloudFront domain name for review
+    Value: !GetAtt ReviewCloudFrontDistribution.DomainName
+  ReviewCloudFrontDistributionId:
+    Description: CloudFront distribution ID for review
+    Value: !Ref ReviewCloudFrontDistribution

@@ -1,0 +1,32 @@
+[package]
+name = "lambda"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "api-lambda-bootstrap"
+path = "src/main.rs"
+
+[[bin]]
+name = "export_openapi"
+path = "src/bin/export_openapi.rs"
+
+[dependencies]
+domain = { path = "../../core/domain" }
+application = { path = "../../core/application" }
+infrastructure = { path = "../../core/infrastructure" }
+presentation = { path = "../../core/presentation" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+lambda_runtime.workspace = true
+sea-orm.workspace = true
+anyhow.workspace = true
+utoipa.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+aws_lambda_events.workspace = true
+rstest.workspace = true
+proptest.workspace = true
+serde_json.workspace = true

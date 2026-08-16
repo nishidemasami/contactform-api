@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  retained subsystem - フロントエンドSPA・レビュー資料格納用S3バケット
+
+Parameters:
+  ServiceName:
+    Type: String
+    Description: サービス名
+  Stage:
+    Type: String
+    AllowedValues:
+      - develop
+      - release
+    Description: デプロイステージ
+  SecretReferer:
+    Type: String
+    NoEcho: true
+    Description: シークレットトークン
+  SubSystem:
+    Type: String
+    Default: retained
+    AllowedValues:
+      - retained
+    Description: サブシステム分類名
+
+Conditions:
+  IsRelease: !Equals [!Ref Stage, release]
+
+Resources:
+  # フロントエンドSPA格納用S3バケット
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    # releaseステージはデータ保護のため削除を禁止し、developステージは環境の再作成を容易にするため削除を許可する
+    DeletionPolicy: !If [IsRelease, Retain, Delete]
+    UpdateReplacePolicy: !If [IsRelease, Retain, Delete]
+    Properties:
+      # パブリックアクセスブロックを部分的に解除（バケットポリシーで公開するため）
+      PublicAccessBlockConfiguration:
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html # SPAとしてエラーハンドリングもブラウザサイドで処理する
+
+  # CloudFrontからS3へのアクセスを許可するバケットポリシー
+  # 注意: Refererヘッダーによるアクセス制御は簡易的な抑止であり、完全なセキュリティを保証しない。
+  # 本番運用では CloudFront + S3 REST API origin + OAC の構成を推奨する。
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+            Condition:
+              StringEquals:
+                "aws:Referer": !Ref SecretReferer
+
+  # レビュー資料配信用S3バケット
+  ReviewBucket:
+    Type: AWS::S3::Bucket
+    # releaseステージはデータ保護のため削除を禁止し、developステージは環境の再作成を容易にするため削除を許可する
+    DeletionPolicy: !If [IsRelease, Retain, Delete]
+    UpdateReplacePolicy: !If [IsRelease, Retain, Delete]
+    Properties:
+      # パブリックアクセスブロックを部分的に解除（バケットポリシーで公開するため）
+      PublicAccessBlockConfiguration:
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+
+  # CloudFrontからS3へのアクセスを許可するバケットポリシー
+  ReviewBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReviewBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub ${ReviewBucket.Arn}/*
+            Condition:
+              StringEquals:
+                "aws:Referer": !Ref SecretReferer
+
+  FrontendBucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/FrontendBucketName"
+      Type: String
+      Value: !Ref FrontendBucket
+      Description: "FrontendBucket Name"
+
+  FrontendWebsiteURLParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/FrontendWebsiteURL"
+      Type: String
+      Value: !Select [2, !Split ["/", !GetAtt FrontendBucket.WebsiteURL]] # WebsiteURL（http://...）からドメイン部分だけを抽出
+      Description: "FrontendBucket WebsiteURL"
+
+  ReviewBucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/ReviewBucketName"
+      Type: String
+      Value: !Ref ReviewBucket
+      Description: "ReviewBucket Name"
+
+  ReviewWebsiteURLParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/ReviewWebsiteURL"
+      Type: String
+      Value: !Select [2, !Split ["/", !GetAtt ReviewBucket.WebsiteURL]] # WebsiteURL（http://...）からドメイン部分だけを抽出
+      Description: "ReviewBucket WebsiteURL"

@@ -1,0 +1,333 @@
+name: review CI/CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: デプロイステージ
+        required: true
+        default: develop
+        type: choice
+        options:
+          - develop
+  pull_request:
+    paths:
+      - "api/**"
+      - "core/**"
+      - "db/sea_orm_entities/**"
+      - "docs/**"
+      - "frontend/**"
+      - "review/**"
+      - ".github/workflows/review-cicd.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+  deployments: write
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Rustツールチェーンのセットアップ
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Node.jsのセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: pnpmのセットアップ
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: デプロイステージの設定
+        id: stage
+        run: |
+          if [ -n "${{ github.event.inputs.stage }}" ]; then
+            echo "stage=${{ github.event.inputs.stage }}" >> "$GITHUB_OUTPUT"
+            echo "commitid=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "stage=develop" >> "$GITHUB_OUTPUT"
+            echo "commitid=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
+
+      - name: sam validate --lint の実行
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: sam validate --lint --template-file review/template.yaml
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Liquibaseでローカルマイグレーション
+        run: |
+          docker run --rm \
+            -e LIQUIBASE_HUB_MODE=off \
+            -e JAVA_OPTS="-DLAMBDA_ROLE=local -DAWS_ACCOUNT_ID=123456789012" \
+            --network host \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.33.0 \
+            --search-path=/workspace \
+            --changelog-file=db/liquibase/changelog.xml \
+            --contexts=local \
+            --url=jdbc:postgresql://localhost:5432/postgres \
+            --username=postgres \
+            --password=postgres \
+            update
+
+      - name: cargo-tarpaulinのインストール
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: カバレッジレポートの生成
+        run: cargo tarpaulin --out Html -- --include-ignored
+
+      - name: Rustドキュメントの生成
+        run: cargo doc --no-deps
+
+      - name: OpenAPI仕様の生成
+        working-directory: api/lambda
+        run: cargo run --bin export_openapi
+
+      - name: 依存関係のインストール
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: フロントエンドのビルド
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Storybookのビルド
+        working-directory: frontend
+        run: pnpm run build-storybook
+
+      - name: TypeDocの生成
+        working-directory: frontend
+        run: pnpm run build:typedoc
+
+      - name: docsディレクトリをHTMLに変換
+        working-directory: docs
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v .:/honkit ghcr.io/nishidemasami/markdown-docs:v1.2.3 npx honkit build
+
+      - name: レビュー資料の収集
+        run: |
+          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc
+          cp -r docs/_book/. review-output/
+          cp tarpaulin-report.html review-output/coverage/tarpaulin-report.html
+          cp -r target/doc/. review-output/rust-doc/
+          cp api/openapi.yaml review-output/
+          cp -r frontend/storybook-static/. review-output/storybook/
+          cp -r frontend/typedoc/. review-output/typedoc/
+
+      - name: Generate Stoplight Elements
+        run: |
+          mkdir -p review-output/stoplight
+          cat <<'STOPLIGHT' > review-output/stoplight/index.html
+          <!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <script src="https://unpkg.com/@stoplight/elements@9.0.23/web-components.min.js" crossorigin="anonymous"></script>
+              <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
+            </head>
+            <body>
+              <elements-api apiDescriptionUrl="../openapi.yaml" router="hash" />
+            </body>
+          </html>
+          STOPLIGHT
+
+      - name: Generate RapiDoc HTML
+        run: |
+          mkdir -p review-output/rapidoc
+          cat <<'RAPIDOC' > review-output/rapidoc/index.html
+          <!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <script src="https://unpkg.com/rapidoc@9.3.8/dist/rapidoc-min.js" crossorigin="anonymous"></script>
+            </head>
+            <body>
+              <rapi-doc style="visibility: visible" id="doc" spec-url="../openapi.yaml" render-style="read" allow-try="true" allow-authentication="true" persist-auth="true" theme="light" show-header="false" api-key-name="Authorization" api-key-location="header"></rapi-doc>
+            </body>
+          </html>
+          RAPIDOC
+
+      - name: アーティファクトのアップロード
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-docs
+          path: review-output/
+
+  deploy:
+    name: deploy
+    needs: validate
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: AWSクレデンシャルの設定
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-3
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: デプロイステージの設定
+        id: stage
+        run: |
+          if [ -n "${{ github.event.inputs.stage }}" ]; then
+            echo "stage=${{ github.event.inputs.stage }}" >> "$GITHUB_OUTPUT"
+            echo "commitid=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "subdirectoryname=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "deployment_environment=${{ github.event.inputs.stage }}レビュー資料" >> "$GITHUB_OUTPUT"
+          else
+            echo "stage=develop" >> "$GITHUB_OUTPUT"
+            echo "commitid=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "subdirectoryname=pull_request/${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "deployment_environment=プルリクエスト#${{ github.event.pull_request.number }}レビュー資料" >> "$GITHUB_OUTPUT"
+          fi
+          echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
+
+      - name: sam deploy の実行
+        run: |
+          sam deploy \
+            --template-file review/template.yaml \
+            --stack-name "${{ steps.stage.outputs.service_name }}-review-${{ steps.stage.outputs.stage }}" \
+            --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
+            --parameter-overrides \
+              ServiceName="${{ steps.stage.outputs.service_name }}" \
+              Stage="${{ steps.stage.outputs.stage }}" \
+              SecretReferer="${{ secrets.SECRET_REFERER }}" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3
+
+      - name: アーティファクトのダウンロード
+        uses: actions/download-artifact@v4
+        with:
+          name: review-docs
+          path: review-output/
+
+      - name: スタック情報の取得
+        id: cloudformation_info
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "${{ steps.stage.outputs.service_name }}-review-${{ steps.stage.outputs.stage }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='ReviewBucketName'].OutputValue" \
+            --output text)
+          echo "bucket_name=$BUCKET_NAME" >> "$GITHUB_OUTPUT"
+
+          CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name "${{ steps.stage.outputs.service_name }}-review-${{ steps.stage.outputs.stage }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomainName'].OutputValue" \
+            --output text)
+          echo "review_cloudfront_domain=$CLOUDFRONT_DOMAIN" >> "$GITHUB_OUTPUT"
+
+          FRONTEND_CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name "${{ steps.stage.outputs.service_name }}-frontend-${{ steps.stage.outputs.stage }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomainName'].OutputValue" \
+            --output text)
+          echo "frontend_cloudfront_domain=$FRONTEND_CLOUDFRONT_DOMAIN" >> "$GITHUB_OUTPUT"
+
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name "${{ steps.stage.outputs.service_name }}-review-${{ steps.stage.outputs.stage }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='ReviewCloudFrontDistributionId'].OutputValue" \
+            --output text)
+          echo "distribution_id=$DISTRIBUTION_ID" >> "$GITHUB_OUTPUT"
+
+      - name: openapi.yamlのAPIエンドポイント情報の追加
+        run: |
+          echo "" >> review-output/openapi.yaml
+          echo "servers:" >> review-output/openapi.yaml
+          echo "- url: https://${{ steps.cloudformation_info.outputs.frontend_cloudfront_domain }}" >> review-output/openapi.yaml
+
+      - name: GitHub Deploymentの作成
+        id: deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const result = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: '${{ steps.stage.outputs.commitid }}',
+              environment: '${{ steps.stage.outputs.deployment_environment }}',
+              auto_merge: false,
+              required_contexts: [],
+              description: 'レビュー資料の公開'
+            });
+            return result.data.id;
+          result-encoding: string
+
+      - name: S3へのアップロード
+        run: |
+          aws s3 sync review-output/ \
+            s3://${{ steps.cloudformation_info.outputs.bucket_name }}/${{ steps.stage.outputs.subdirectoryname }}/ \
+            --delete
+
+      - name: CloudFrontのキャッシュ削除
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.cloudformation_info.outputs.distribution_id }} \
+            --paths "/${{ steps.stage.outputs.subdirectoryname }}/*"
+
+      - name: GitHub Deployment Statusの更新
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'success',
+              environment_url: 'https://${{ steps.cloudformation_info.outputs.review_cloudfront_domain }}/${{ steps.stage.outputs.subdirectoryname }}/index.html',
+              description: 'レビュー資料の公開完了'
+            });
+
+      - name: Mark deployment failure
+        if: failure() && steps.deployment.outputs.result != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'failure'
+            })

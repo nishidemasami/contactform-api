@@ -1,0 +1,263 @@
+name: DB CI/CD
+
+on:
+  push:
+    branches:
+      - develop
+      - release
+    paths:
+      - "db/**"
+      - ".github/workflows/db-cicd.yaml"
+  pull_request:
+    paths:
+      - "db/**"
+      - ".github/workflows/db-cicd.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Rustツールチェーンのセットアップ
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: sam validate --lint の実行
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: sam validate --lint --template-file db/template.yaml
+
+      - name: cargo fmt -- --check の実行
+        run: cargo fmt -- --check
+
+      - name: cargo check の実行
+        run: cargo check --workspace --all-targets --all-features
+
+      - name: cargo clippy の実行
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Liquibaseでローカルマイグレーション
+        run: |
+          docker run --rm \
+            -e LIQUIBASE_HUB_MODE=off \
+            -e JAVA_OPTS="-DLAMBDA_ROLE=local -DAWS_ACCOUNT_ID=123456789012" \
+            --network host \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.33.0 \
+            --search-path=/workspace \
+            --changelog-file=db/liquibase/changelog.xml \
+            --contexts=local \
+            --url=jdbc:postgresql://localhost:5432/postgres \
+            --username=postgres \
+            --password=postgres \
+            update
+
+      - name: cargo test --all-features -- --include-ignored の実行
+        run: cargo test --workspace --all-features -- --include-ignored
+
+  migrate:
+    name: DSQLマイグレーション
+    needs: validate
+    if: >-
+      github.event_name == 'push' &&
+      github.actor != 'github-actions[bot]' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: AWSクレデンシャルの設定
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-3
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: デプロイステージの設定
+        id: stage
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "stage=develop" >> "$GITHUB_OUTPUT"
+          else
+            echo "stage=release" >> "$GITHUB_OUTPUT"
+          fi
+          echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
+
+      - name: sam deploy の実行
+        run: |
+          sam deploy \
+            --template-file db/template.yaml \
+            --stack-name "${{ steps.stage.outputs.service_name }}-db-${{ steps.stage.outputs.stage }}" \
+            --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
+            --parameter-overrides \
+              Stage="${{ steps.stage.outputs.stage }}" \
+              ServiceName="${{ steps.stage.outputs.service_name }}" \
+              SubSystem=db \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3
+
+      - name: Liquibaseマイグレーション
+        env:
+          STAGE: ${{ steps.stage.outputs.stage }}
+          SERVICE_NAME: ${{ steps.stage.outputs.service_name }}
+        run: |
+          DSQL_ENDPOINT=$(aws ssm get-parameter \
+            --name "/${STAGE}/${SERVICE_NAME}/db/DSQLEndpoint" \
+            --query "Parameter.Value" \
+            --output text)
+          echo "::add-mask::$DSQL_ENDPOINT"
+
+          LAMBDA_ROLE=$(aws ssm get-parameter \
+            --name "/${STAGE}/${SERVICE_NAME}/db/DbConnectLambdaRole" \
+            --query "Parameter.Value" \
+            --output text)
+          echo "::add-mask::$LAMBDA_ROLE"
+
+          TOKEN=$(aws dsql generate-db-connect-admin-auth-token \
+            --hostname "$DSQL_ENDPOINT" \
+            --region ap-northeast-3)
+          echo "::add-mask::$TOKEN"
+
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          echo "::add-mask::$AWS_ACCOUNT_ID"
+
+          docker run --rm \
+            -e LIQUIBASE_HUB_MODE=off \
+            -e JAVA_OPTS="-DLAMBDA_ROLE=$LAMBDA_ROLE -DAWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.33.0 \
+            --search-path=/workspace \
+            --changelog-file=db/liquibase/changelog.xml \
+            --contexts="$STAGE" \
+            --url="jdbc:postgresql://$DSQL_ENDPOINT/postgres" \
+            --username=admin \
+            --password="$TOKEN" \
+            update
+
+  generate_orm:
+    name: ORM定義生成
+    needs: migrate
+    if: >-
+      github.event_name == 'push' &&
+      github.actor != 'github-actions[bot]' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: AWSクレデンシャルの設定
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-3
+
+      - name: Rustツールチェーンのセットアップ
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+
+      - name: jqのインストール
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: sea-orm-cliのインストール
+        run: cargo install sea-orm-cli --locked
+
+      - name: デプロイステージとエンドポイントの設定
+        id: dsql
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            STAGE=develop
+          else
+            STAGE=release
+          fi
+          echo "stage=$STAGE" >> "$GITHUB_OUTPUT"
+          SERVICE_NAME=contactform-api-public
+          echo "service_name=$SERVICE_NAME" >> "$GITHUB_OUTPUT"
+          DSQL_ENDPOINT=$(aws ssm get-parameter \
+            --name "/${STAGE}/${SERVICE_NAME}/db/DSQLEndpoint" \
+            --query "Parameter.Value" \
+            --output text)
+          echo "::add-mask::$DSQL_ENDPOINT"
+          echo "endpoint=$DSQL_ENDPOINT" >> "$GITHUB_OUTPUT"
+
+      - name: ORM定義の生成
+        env:
+          DSQL_ENDPOINT: ${{ steps.dsql.outputs.endpoint }}
+        run: |
+          TOKEN=$(aws dsql generate-db-connect-admin-auth-token \
+            --region ap-northeast-3 \
+            --expires-in 3600 \
+            --hostname "$DSQL_ENDPOINT")
+          echo "::add-mask::$TOKEN"
+
+          ENCODED_TOKEN=$(printf '%s' "$TOKEN" | jq -rR @uri)
+          DATABASE_URL="postgres://admin:${ENCODED_TOKEN}@${DSQL_ENDPOINT}:5432/postgres?sslmode=require"
+
+          sea-orm-cli generate entity \
+            -u "$DATABASE_URL" \
+            -o db/sea_orm_entities/src/entity \
+            --ignore-tables databasechangelog \
+            --ignore-tables databasechangeloglock
+
+      # 設定の確認: GitHubリポジトリの Settings ＞ Actions ＞ General ＞ Workflow permissions で 「Read and write permissions」 権限が必要
+      - name: 変更がある場合にコミット
+        run: |
+          if git diff --quiet -- db/sea_orm_entities/src/entity; then
+            echo "変更なし"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add db/sea_orm_entities/src/entity
+          git commit -m "DBスキーマ変更に伴うORM定義の自動更新"
+          git push

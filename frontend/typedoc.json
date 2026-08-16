@@ -1,0 +1,4 @@
+{
+  "entryPoints": ["src/lib/inquiryApi.ts"],
+  "out": "typedoc"
+}

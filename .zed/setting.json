@@ -1,0 +1,19 @@
+{
+  "tab_size": 2,
+  // 常に半角スペースを表示
+  "show_whitespaces": "all",
+  // タブキーを押した際、タブ文字ではなく半角スペースを入力する (false = スペース化)
+  "hard_tabs": false,
+  // 長い行の折り返し設定 ("bounded","editor_width","prefer_line","none")
+  "soft_wrap": "editor_width",
+
+  // プロジェクト内で特定の言語だけルール（インデントなど）を変えたい場合に記述します
+  "languages": {
+    "Python": {
+      "tab_size": 4 // PythonだけはPEP8に準拠してインデント4にする
+    },
+    "Markdown": {
+      "soft_wrap": "editor_width" // ドキュメント類は画面端で必ず折り返す
+      }
+    }
+}
