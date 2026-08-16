@@ -1,0 +1,181 @@
+name: API CI/CD
+
+on:
+  push:
+    branches:
+      - develop
+      - release
+    paths:
+      - "api/**"
+      - "core/**"
+      - ".github/workflows/api-cicd.yaml"
+  pull_request:
+    paths:
+      - "api/**"
+      - "core/**"
+      - ".github/workflows/api-cicd.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Rustツールチェーンのセットアップ
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: cargo fmt -- --check の実行
+        run: cargo fmt -- --check
+
+      - name: cargo check の実行
+        run: cargo check --workspace --all-targets --all-features
+
+      - name: cargo clippy の実行
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Liquibaseでローカルマイグレーション
+        run: |
+          docker run --rm \
+            -e LIQUIBASE_HUB_MODE=off \
+            --network host \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.33.0 \
+            --search-path=/workspace \
+            --changelog-file=db/liquibase/changelog.xml \
+            --contexts=local \
+            --url=jdbc:postgresql://localhost:5432/postgres \
+            --username=postgres \
+            --****** \
+            -DLAMBDA_ROLE=local \
+            -DAWS_ACCOUNT_ID=123456789012 \
+            update
+
+      - name: cargo test --all-features -- --include-ignored の実行
+        run: cargo test --workspace --all-features -- --include-ignored
+
+      - name: sam validate --lint の実行
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: sam validate --lint --template-file api/template.yaml
+
+      - name: cargo-lambdaのインストール
+        run: pip install cargo-lambda
+
+      - name: OpenAPI仕様書の生成と差分確認
+        run: |
+          cargo build --bin api-lambda-bootstrap --release 2>/dev/null || true
+          if cargo build --bin openapi-export 2>/dev/null; then
+            ./target/release/openapi-export > api/openapi.yaml
+          else
+            echo "openapi-exportバイナリが見つからないためスキップします"
+          fi
+
+      - name: OpenAPI仕様書の差分がある場合にコミット
+        if: >-
+          github.event_name == 'push' &&
+          github.actor != 'github-actions[bot]' &&
+          (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
+        run: |
+          if [ -f api/openapi.yaml ] && ! git diff --quiet -- api/openapi.yaml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add api/openapi.yaml
+            git commit -m "OpenAPI仕様書の自動更新"
+            git push
+          else
+            echo "変更なし"
+          fi
+
+  deploy:
+    name: デプロイ
+    needs: validate
+    if: >-
+      github.event_name == 'push' &&
+      github.actor != 'github-actions[bot]' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/release' && 'release' || 'develop' }}
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Rustツールチェーンのセットアップ
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: AWSクレデンシャルの設定
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-3
+
+      - name: AWS SAM CLIのセットアップ
+        uses: aws-actions/setup-sam@v3
+
+      - name: cargo-lambdaのインストール
+        run: pip install cargo-lambda
+
+      - name: デプロイステージの設定
+        id: info
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "stage=develop" >> "$GITHUB_OUTPUT"
+          else
+            echo "stage=release" >> "$GITHUB_OUTPUT"
+          fi
+          echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
+
+      - name: sam build の実行
+        run: sam build --template-file api/template.yaml
+
+      - name: sam deploy の実行
+        run: |
+          sam deploy \
+            --template-file api/template.yaml \
+            --stack-name "${{ steps.info.outputs.service_name }}-api-${{ steps.info.outputs.stage }}" \
+            --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
+            --parameter-overrides \
+              ServiceName="${{ steps.info.outputs.service_name }}" \
+              Stage="${{ steps.info.outputs.stage }}" \
+              SubSystem=api \
+              DbConnectLambdaRole="/${{ steps.info.outputs.stage }}/${{ steps.info.outputs.service_name }}/db/DbConnectLambdaRole" \
+              DSQLEndpoint="/${{ steps.info.outputs.stage }}/${{ steps.info.outputs.service_name }}/db/DSQLEndpoint" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3

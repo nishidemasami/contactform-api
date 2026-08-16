@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  db subsystem - Aurora DSQLクラスターおよびLambda実行用IAMロール
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: contactform-api-public
+    AllowedValues:
+      - contactform-api-public
+    Description: サービス名
+  Stage:
+    Type: String
+    Default: develop
+    AllowedValues:
+      - develop
+      - release
+    Description: デプロイステージ (develop または release)
+  SubSystem:
+    Type: String
+    Default: db
+    AllowedValues:
+      - db
+    Description: サブシステム分類名
+
+Conditions:
+  IsRelease: !Equals [!Ref Stage, release]
+
+Resources:
+  # Aurora DSQLクラスター
+  DSQLCluster:
+    Type: AWS::DSQL::Cluster
+    # releaseステージはデータ保護のため削除を禁止し、developステージは環境の再作成を容易にするため削除を許可する
+    DeletionPolicy: !If [IsRelease, Retain, Delete]
+    UpdateReplacePolicy: !If [IsRelease, Retain, Delete]
+    Properties:
+      DeletionProtectionEnabled: !If [IsRelease, true, false]
+
+  # Lambda実行ロール (insertonly権限付き)
+  DbConnectLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DSQLConnectPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dsql:DbConnectAdmin
+                Resource: !GetAtt DSQLCluster.ResourceArn
+
+  # DSQLエンドポイントをSSM Parameter Storeに保存
+  DSQLEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/DSQLEndpoint"
+      Type: String
+      Value: !GetAtt DSQLCluster.Endpoint
+      Description: "Aurora DSQLクラスターのエンドポイント"
+
+  # Lambda実行ロールARNをSSM Parameter Storeに保存
+  DbConnectLambdaRoleParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${Stage}/${ServiceName}/${SubSystem}/DbConnectLambdaRole"
+      Type: String
+      Value: !GetAtt DbConnectLambdaRole.Arn
+      Description: "DB（DSQL）アクセス用Lambda実行ロールのARN"

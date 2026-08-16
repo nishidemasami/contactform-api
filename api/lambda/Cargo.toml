@@ -20,5 +20,8 @@ sea-orm.workspace = true
 anyhow.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+aws_lambda_events.workspace = true
 rstest.workspace = true
 proptest.workspace = true
+serde_json.workspace = true
