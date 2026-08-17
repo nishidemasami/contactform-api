@@ -28,6 +28,38 @@ AWSリソースには物理名の文字数制限が厳しいものがあるた�
 
 ---
 
+## 2. Aurora DSQL デプロイ時の Service-Linked Role 作成権限エラー
+
+### 問題
+
+CloudFormation で `AWS::DSQL::Cluster` リソースをデプロイする際、Amazon Aurora DSQL 用の Service-Linked Role（`AWSServiceRoleForDSQL`）の自動作成が必要です。
+CloudFormation 実行ロール（`SAM_DEPLOY_ROLE_ARN`）に `iam:CreateServiceLinkedRole` の権限が付与されていない場合、以下のエラーが発生してデプロイが失敗（`CREATE_FAILED`）します。
+
+```text
+CREATE_FAILED AWS::DSQL::Cluster DSQLCluster Resource handler returned message:
+"Insufficient permissions to create service-linked role. Add the iam:CreateServiceLinkedRole permission to your IAM policy. (Service: Dsql, Status Code: 403...)"
+```
+
+### 対策
+
+CloudFormation 実行用 IAM ロール（`SAM_DEPLOY_ROLE_ARN`）の IAM ポリシーに `iam:CreateServiceLinkedRole`（対象サービス: `dsql.amazonaws.com`）の許可ステートメントを追加します。
+
+```json
+{
+    "Sid": "AllowCreateSLRForDSQL",
+    "Effect": "Allow",
+    "Action": "iam:CreateServiceLinkedRole",
+    "Resource": "arn:aws:iam::*:role/aws-service-role/dsql.amazonaws.com/AWSServiceRoleForDSQL*",
+    "Condition": {
+        "StringEquals": {
+            "iam:AWSServiceName": "dsql.amazonaws.com"
+        }
+    }
+}
+```
+
+---
+
 ## 関連ページ
 
 - [infrastructure.md](./infrastructure.md) — インフラ規約（SAM・スタック設計）

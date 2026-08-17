@@ -60,6 +60,10 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /{proxy+}
             Method: ANY
+    Metadata:
+      BuildMethod: rust-cargolambda
+      BuildProperties:
+        Binary: api-lambda-bootstrap
 
   # API Gateway HTTP API
   HttpApi:
