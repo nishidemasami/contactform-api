@@ -60,11 +60,6 @@ jobs:
         with:
           node-version: "22"
 
-      - name: pnpmのセットアップ
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: AWS SAM CLIのセットアップ
         uses: aws-actions/setup-sam@v3
 
@@ -119,19 +114,19 @@ jobs:
 
       - name: 依存関係のインストール
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: フロントエンドのビルド
         working-directory: frontend
-        run: pnpm run build
+        run: npm run build
 
       - name: Storybookのビルド
         working-directory: frontend
-        run: pnpm run build-storybook
+        run: npm run build-storybook
 
       - name: TypeDocの生成
         working-directory: frontend
-        run: pnpm run build:typedoc
+        run: npm run build:typedoc
 
       - name: docsディレクトリをHTMLに変換
         working-directory: docs
