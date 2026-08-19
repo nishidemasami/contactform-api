@@ -96,7 +96,7 @@ jobs:
 
       - name: OpenAPI仕様書の生成と差分確認
         run: |
-          cargo build --bin api-lambda-bootstrap --release 2>/dev/null || true
+          cargo build --bin bootstrap --release 2>/dev/null || true
           if cargo build --bin openapi-export 2>/dev/null; then
             ./target/release/openapi-export > api/openapi.yaml
           else
