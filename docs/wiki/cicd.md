@@ -68,9 +68,9 @@ cargo test --workspace --all-features -- --include-ignored  # テスト（ignore
 ```bash
 sam validate --lint                # SAMテンプレート検証
 npx tsc --noEmit                   # コンパイルチェック
-pnpm run lint                      # 静的解析
-pnpm test                          # ユニットテスト
-pnpm audit                         # 脆弱性診断
+npm run lint                       # 静的解析
+npm test                           # ユニットテスト
+npm audit                          # 脆弱性診断
 ```
 
 ---
@@ -120,7 +120,7 @@ docker run liquibase/liquibase:4.33.0 update ...
 - ビルドjobの権限は最小限（`contents: read` 等）
 - 値の受け渡しは `jobs.<job_id>.outputs` を使用
 - ビルド成果物の受け渡しは `actions/upload-artifact` / `actions/download-artifact` を使用
-- フロントエンドのビルドは `pnpm audit` による脆弱性診断を含む
+- フロントエンドのビルドは `npm audit` による脆弱性診断を含む
 
 ---
 
