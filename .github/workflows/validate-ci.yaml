@@ -16,9 +16,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Verify & Validate
@@ -53,7 +53,7 @@ jobs:
       - name: Install Extra CLI Tools
         uses: taiki-e/install-action@v2
         with:
-          tool: sea-orm-cli,cargo-tarpaulin
+          tool: sea-orm-cli,cargo-tarpaulin,cargo-lambda
 
       - name: Check Rust format
         run: cargo fmt -- --check
@@ -93,3 +93,11 @@ jobs:
           sam validate --lint --template-file api/template.yaml
           sam validate --lint --template-file db/template.yaml
           sam validate --lint --template-file retained/template.yaml
+
+      - name: SAM アプリケーションのビルド
+        run: |
+          sam build --template-file api/template.yaml
+
+      - name: sam local start-api による結合テストの実行
+        run: |
+          bash integration-test/run-integration-tests.sh

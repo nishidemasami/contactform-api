@@ -72,39 +72,68 @@ async fn executor() -> Result<(), lambda_runtime::Error> {
         .without_time()
         .init();
 
-    let dsql_endpoint: &String = DSQL_ENDPOINT
-        .get_or_init(|| async {
-            match env::var("DSQL_ENDPOINT") {
-                Ok(value) => value,
-                Err(e) => {
-                    tracing::error!("DSQL_ENDPOINT 環境変数の取得に失敗しました: {:?}", e);
-                    panic!("Internal Server Error");
-                }
-            }
-        })
-        .await;
-
-    let aws_region: &String = AWS_REGION
-        .get_or_init(|| async {
-            match env::var("AWS_REGION") {
-                Ok(value) => value,
-                Err(e) => {
-                    tracing::error!("AWS_REGION 環境変数の取得に失敗しました: {:?}", e);
-                    panic!("Internal Server Error");
-                }
-            }
-        })
-        .await;
-
     let db: &DatabaseConnection = DATABASE_CONNECTION
         .get_or_init(|| async {
-            create_connection(&DatabaseConfig::AuroraDSQL {
-                role: "insertonly".into(),
-                endpoint: dsql_endpoint.as_str().to_string().into(),
-                region: aws_region.as_str().to_string().into(),
-            })
-            .await
-            .unwrap_or_else(|e| {
+            let config = if let Ok(host) = env::var("POSTGRES_HOST") {
+                let port = env::var("POSTGRES_PORT")
+                    .ok()
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(5432);
+                let database = env::var("POSTGRES_DB").unwrap_or_else(|_| "postgres".to_string());
+                let username =
+                    env::var("POSTGRES_USER").unwrap_or_else(|_| "insertonly".to_string());
+                let password =
+                    env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "insertonly".to_string());
+
+                tracing::info!(
+                    "ローカル PostgreSQL 設定で接続を開始します ({}:{})",
+                    host,
+                    port
+                );
+                DatabaseConfig::PostgreSQL {
+                    host: host.into(),
+                    port,
+                    database: database.into(),
+                    username: username.into(),
+                    password: password.into(),
+                }
+            } else {
+                let dsql_endpoint: &String = DSQL_ENDPOINT
+                    .get_or_init(|| async {
+                        match env::var("DSQL_ENDPOINT") {
+                            Ok(value) => value,
+                            Err(e) => {
+                                tracing::error!(
+                                    "DSQL_ENDPOINT 環境変数の取得に失敗しました: {:?}",
+                                    e
+                                );
+                                panic!("Internal Server Error");
+                            }
+                        }
+                    })
+                    .await;
+
+                let aws_region: &String = AWS_REGION
+                    .get_or_init(|| async {
+                        match env::var("AWS_REGION") {
+                            Ok(value) => value,
+                            Err(e) => {
+                                tracing::error!("AWS_REGION 環境変数の取得に失敗しました: {:?}", e);
+                                panic!("Internal Server Error");
+                            }
+                        }
+                    })
+                    .await;
+
+                tracing::info!("Aurora DSQL 設定で接続を開始します ({})", dsql_endpoint);
+                DatabaseConfig::AuroraDSQL {
+                    role: "insertonly".into(),
+                    endpoint: dsql_endpoint.as_str().to_string().into(),
+                    region: aws_region.as_str().to_string().into(),
+                }
+            };
+
+            create_connection(&config).await.unwrap_or_else(|e| {
                 tracing::error!("データベース接続の初期化に失敗しました: {:?}", e);
                 panic!("Database Connection Error");
             })
