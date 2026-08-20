@@ -27,7 +27,7 @@ jobs:
     name: validate
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     services:
       postgres:
         image: postgres:16-alpine
@@ -133,7 +133,7 @@ jobs:
       github.event_name == 'push' &&
       github.actor != 'github-actions[bot]' &&
       (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref == 'refs/heads/release' && 'release' || 'develop' }}
     permissions:
       id-token: write
