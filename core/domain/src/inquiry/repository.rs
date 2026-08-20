@@ -11,7 +11,11 @@ use super::{entity::Inquiry, repository_error::InquiryRepositoryError};
 ///
 /// ## フロー
 ///
-/// `application` └─▶ `InquiryRepository::save` └─▶ `infrastructure`
+/// ```text
+/// `application`  
+///     └─▶ `InquiryRepository::save`
+///         └─▶ `infrastructure`
+/// ```
 #[async_trait]
 pub trait InquiryRepository: Send + Sync {
     /// 問い合わせを保存する

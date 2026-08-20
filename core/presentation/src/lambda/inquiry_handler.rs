@@ -28,12 +28,14 @@ use crate::{
 ///
 /// ## フロー
 ///
+/// ```text
 /// `ApiGatewayV2httpRequest`
 ///   └─▶ ルーティング
 ///         ├─▶ `POST /api/v1/inquiry` → `create_inquiry`
 ///         ├─▶ `GET /api/v1/inquiries` → 501
 ///         ├─▶ 404 → 404
 ///         └─▶ 405 → 405
+/// ```
 pub async fn handler(
     repository: Arc<dyn InquiryRepository>,
     event: LambdaEvent<ApiGatewayV2httpRequest>,

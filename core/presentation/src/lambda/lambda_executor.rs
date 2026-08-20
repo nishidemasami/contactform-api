@@ -15,8 +15,10 @@ use lambda_runtime::{Error, LambdaEvent, run, service_fn};
 ///
 /// ## フロー
 ///
+/// ```text
 /// Lambda ランタイム
 ///   └─▶ `service_fn(invoke)` で各リクエストをハンドリング
+/// ```
 pub async fn lambda_executor<F, Fut>(invoke: F) -> Result<(), Error>
 where
     F: Fn(LambdaEvent<ApiGatewayV2httpRequest>) -> Fut,

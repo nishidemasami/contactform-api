@@ -58,6 +58,9 @@ jobs:
       - name: AWS SAM CLIのセットアップ
         uses: aws-actions/setup-sam@v3
 
+      - name: Install Zig via pip3 (System Force)
+        run: pip3 install ziglang --break-system-packages
+
       - name: cargo fmt -- --check の実行
         run: cargo fmt -- --check
 
@@ -169,12 +172,13 @@ jobs:
           echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
 
       - name: sam build の実行
-        run: sam build --template-file api/template.yaml
+        working-directory: api
+        run: sam build
 
       - name: sam deploy の実行
+        working-directory: api
         run: |
           sam deploy \
-            --template-file api/template.yaml \
             --stack-name "${{ steps.info.outputs.service_name }}-api-${{ steps.info.outputs.stage }}" \
             --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
             --parameter-overrides \

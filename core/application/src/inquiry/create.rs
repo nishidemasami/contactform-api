@@ -22,10 +22,12 @@ use super::{
 ///
 /// ## フロー
 ///
+/// ```text
 /// `CreateInquiryInput`
 ///   └─▶ ドメインオブジェクト生成（バリデーション）
 ///         └─▶ `InquiryRepository::save`
 ///               └─▶ `CreateInquiryOutput`
+/// ```
 pub struct CreateInquiryUsecase {
     repository: Arc<dyn InquiryRepository>,
 }
