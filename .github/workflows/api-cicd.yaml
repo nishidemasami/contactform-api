@@ -149,6 +149,9 @@ jobs:
       - name: Rustツールチェーンのセットアップ
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Zig via pip3 and cargo-lambda (System Force)
+        run: pip3 install ziglang cargo-lambda --break-system-packages
+
       - name: AWSクレデンシャルの設定
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -157,9 +160,6 @@ jobs:
 
       - name: AWS SAM CLIのセットアップ
         uses: aws-actions/setup-sam@v3
-
-      - name: cargo-lambdaのインストール
-        run: pip install cargo-lambda
 
       - name: デプロイステージの設定
         id: info
@@ -173,12 +173,13 @@ jobs:
 
       - name: sam build の実行
         working-directory: api
-        run: sam build
+        run: sam build --template-file api/template.yaml
 
       - name: sam deploy の実行
         working-directory: api
         run: |
           sam deploy \
+            --template-file api/template.yaml \
             --stack-name "${{ steps.info.outputs.service_name }}-api-${{ steps.info.outputs.stage }}" \
             --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
             --parameter-overrides \
