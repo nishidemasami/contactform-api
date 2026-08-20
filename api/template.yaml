@@ -52,6 +52,11 @@ Resources:
     Properties:
       CodeUri: ./lambda
       Handler: bootstrap
+      Runtime: provided.al2023
+      Architectures:
+        - arm64
+      Timeout: 10
+      MemorySize: 128
       Role: !Ref DbConnectLambdaRole
       Events:
         ApiProxy:

@@ -6,26 +6,35 @@
 //!
 //! ## アーキテクチャ概要
 //!
+//! ```
 //! クライアント
 //!   └─▶ Amazon API Gateway HTTP API
 //!         └─▶ AWS Lambda (このモジュール)
 //!               └─▶ Amazon Aurora DSQL (SeaORM経由)
+//! ```
 //!
 //! ## 起動フロー
 //!
+//! ```
 //! `main()`
 //!   └─▶ `executor()`
 //!         ├─▶ [INITフェーズ] tracing初期化
 //!         ├─▶ [INITフェーズ] 環境変数読み込み（DSQL_ENDPOINT, AWS_REGION）
 //!         ├─▶ [INITフェーズ] DB接続確立（OnceCell）
 //!         └─▶ [INVOKEフェーズ] lambda_executor(handler)
+//! ```
 //!
 //! ## 環境変数
 //!
 //! | 変数名 | 必須 | 説明 |
 //! |--------|------|------|
 //! | `DSQL_ENDPOINT` | ✓ | Aurora DSQLクラスターのエンドポイント |
-//! | `AWS_REGION` | ✓ | Aurora DSQLクラスターのAWSリージョン |
+//! 
+//! ## 定義済みランタイム環境変数（使用しているもののみ抜粋）
+//!
+//! | 変数名 | 説明 |
+//! |--------|------|
+//! | `AWS_REGION` | Aurora DSQLクラスターのAWSリージョン |
 
 use std::{env, sync::Arc};
 

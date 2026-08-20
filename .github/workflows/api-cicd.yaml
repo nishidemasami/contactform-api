@@ -169,12 +169,13 @@ jobs:
           echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
 
       - name: sam build の実行
-        run: sam build --template-file api/template.yaml
+        working-directory: api
+        run: sam build
 
       - name: sam deploy の実行
+        working-directory: api
         run: |
           sam deploy \
-            --template-file api/template.yaml \
             --stack-name "${{ steps.info.outputs.service_name }}-api-${{ steps.info.outputs.stage }}" \
             --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
             --parameter-overrides \
