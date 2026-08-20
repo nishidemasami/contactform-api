@@ -79,8 +79,8 @@ async fn get_database_config() -> DatabaseConfig {
 /// データベース設定を生成する（ローカル開発環境用：PostgreSQL）
 #[cfg(feature = "local-dev")]
 async fn get_database_config() -> DatabaseConfig {
-    // ローカル実行時は未設定パニックを防ぐため、デフォルト値（または host.docker.internal）をフォールバックに設定
-    let host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "host.docker.internal".to_string());
+    // ローカル実行時は未設定パニックを防ぐため、デフォルト値（または localhost）をフォールバックに設定
+    let host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
     let port = env::var("POSTGRES_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
