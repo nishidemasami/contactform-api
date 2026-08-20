@@ -55,6 +55,9 @@ jobs:
         with:
           tool: sea-orm-cli,cargo-tarpaulin,cargo-lambda
 
+      - name: Install Zig via pip
+        run: pip3 install ziglang
+
       - name: Check Rust format
         run: cargo fmt -- --check
 
