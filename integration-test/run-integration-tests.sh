@@ -41,7 +41,7 @@ else
     --docker-network host \
     --host "${HOST}" \
     --port "${PORT}" \
-    --warm-containers > "${SCRIPT_DIR}/sam-api.log" 2>&1 &
+    --warm-containers NEVER > "${SCRIPT_DIR}/sam-api.log" 2>&1 &
   SAM_PID=$!
   SAM_STARTED=1
 
