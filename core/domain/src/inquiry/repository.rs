@@ -11,7 +11,7 @@ use super::{entity::Inquiry, repository_error::InquiryRepositoryError};
 ///
 /// ## フロー
 ///
-/// ```
+/// ```text
 /// `application`  
 ///     └─▶ `InquiryRepository::save`
 ///         └─▶ `infrastructure`

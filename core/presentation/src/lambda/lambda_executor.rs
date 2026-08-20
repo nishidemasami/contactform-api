@@ -15,7 +15,7 @@ use lambda_runtime::{Error, LambdaEvent, run, service_fn};
 ///
 /// ## フロー
 ///
-/// ```
+/// ```text
 /// Lambda ランタイム
 ///   └─▶ `service_fn(invoke)` で各リクエストをハンドリング
 /// ```

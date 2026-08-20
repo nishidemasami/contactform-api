@@ -22,7 +22,7 @@ use super::{
 ///
 /// ## フロー
 ///
-/// ```
+/// ```text
 /// `CreateInquiryInput`
 ///   └─▶ ドメインオブジェクト生成（バリデーション）
 ///         └─▶ `InquiryRepository::save`

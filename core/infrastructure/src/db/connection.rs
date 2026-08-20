@@ -10,7 +10,7 @@ use super::{aurora_dsql, config::DatabaseConfig, postgres};
 ///
 /// ## フロー
 ///
-/// ```
+/// ```text
 /// `DatabaseConfig`
 ///   └─▶ `AuroraDSQL` または `PostgreSQL` へ振り分け
 ///         └─▶ `DatabaseConnection`

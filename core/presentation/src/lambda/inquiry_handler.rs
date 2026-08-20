@@ -28,7 +28,7 @@ use crate::{
 ///
 /// ## フロー
 ///
-/// ```
+/// ```text
 /// `ApiGatewayV2httpRequest`
 ///   └─▶ ルーティング
 ///         ├─▶ `POST /api/v1/inquiry` → `create_inquiry`
