@@ -58,6 +58,9 @@ jobs:
       - name: AWS SAM CLIのセットアップ
         uses: aws-actions/setup-sam@v3
 
+      - name: Install Zig via pip3 (System Force)
+        run: pip3 install ziglang --break-system-packages
+
       - name: cargo fmt -- --check の実行
         run: cargo fmt -- --check
 
