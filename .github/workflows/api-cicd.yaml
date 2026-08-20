@@ -94,6 +94,13 @@ jobs:
       - name: cargo-lambdaのインストール
         run: pip install cargo-lambda
 
+      - name: SAM build と sam local invoke によるLambdaテスト
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: |
+          sam build --template-file api/template.yaml
+          sam local invoke ApiFunction -e api/events/event.json --parameter-overrides DbConnectLambdaRole="arn:aws:iam::123456789012:role/test" DSQLEndpoint="test.dsql.ap-northeast-3.on.aws"
+
       - name: OpenAPI仕様書の生成と差分確認
         run: |
           cargo build --bin bootstrap --release 2>/dev/null || true
