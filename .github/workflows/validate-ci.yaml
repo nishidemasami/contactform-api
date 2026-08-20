@@ -22,7 +22,7 @@ permissions:
 jobs:
   validate:
     name: Verify & Validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     # We can run a postgres service directly in GitHub Actions
     services:
