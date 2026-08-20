@@ -40,6 +40,7 @@
   - 通常テストは `cargo test --workspace --all-features` を実行する。
   - 重いテスト、プロパティベーステスト、ローカルDB必須テストは `#[ignore = "..."]` を付与する。
   - ignore付きテストを含めた確認時のみ `cargo test --workspace --all-features -- --include-ignored` を実行する。
+  - バグ修正時には、再発防止および修正の検証を目的として、対象バグに対するテストケースを必ず追加・更新する。
 
 - ドキュメント
   - public itemには原則として日本語のドキュメンテーションコメントを記載する。

@@ -51,7 +51,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./lambda
-      Handler: api-lambda-bootstrap
+      Handler: bootstrap
       Role: !Ref DbConnectLambdaRole
       Events:
         ApiProxy:
@@ -63,7 +63,7 @@ Resources:
     Metadata:
       BuildMethod: rust-cargolambda
       BuildProperties:
-        Binary: api-lambda-bootstrap
+        Binary: bootstrap
 
   # API Gateway HTTP API
   HttpApi:
