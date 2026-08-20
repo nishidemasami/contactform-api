@@ -34,17 +34,6 @@ Parameters:
     Default: "https://nishidemasami.github.io"
     Description: CORSを許可するオリジン
 
-Globals:
-  Function:
-    Timeout: 10
-    MemorySize: 128
-    Runtime: provided.al2023
-    Architectures:
-      - arm64
-    Environment:
-      Variables:
-        DSQL_ENDPOINT: !Ref DSQLEndpoint
-
 Resources:
   # API Lambda関数
   ApiFunction:
@@ -65,6 +54,9 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /{proxy+}
             Method: ANY
+      Environment:
+        Variables:
+          DSQL_ENDPOINT: !Ref DSQLEndpoint
     Metadata:
       BuildMethod: rust-cargolambda
       BuildProperties:
