@@ -93,7 +93,7 @@ jobs:
             --search-path=/workspace \
             --changelog-file=db/liquibase/changelog.xml \
             --contexts=local \
-            --url=jdbc:postgresql://localhost:5432/postgres \
+            --url=jdbc:postgresql://postgres:5432/postgres \
             --username=postgres \
             --password=postgres \
             update
