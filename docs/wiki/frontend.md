@@ -13,7 +13,7 @@
 | フレームワーク | Next.js（SSG）|
 | 言語 | TypeScript |
 | デザイン | Tailwind CSS + マテリアルデザイン |
-| ビルドツール | pnpm |
+| ビルドツール | npm |
 | 目的 | テスト用SPA・Next.jsリファレンス実装 |
 | デプロイ環境 | **developのみ**（releaseはデプロイ不可）|
 
@@ -90,8 +90,8 @@ Content-Type: application/json
 
 ## 7. ビルド・セキュリティ
 
-- パッケージマネージャー: `pnpm`
-- CI/CDに `pnpm audit`（脆弱性診断）を組み込む
+- パッケージマネージャー: `npm`
+- CI/CDに `npm audit`（脆弱性診断）を組み込む
 - ビルドjobの権限を最小化（値受け渡しは `jobs.<job_id>.outputs`、成果物は `upload-artifact` / `download-artifact`）
 
 ---

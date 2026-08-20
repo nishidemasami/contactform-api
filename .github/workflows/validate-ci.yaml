@@ -16,29 +16,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Verify & Validate
-    runs-on: ubuntu-latest
-
-    # We can run a postgres service directly in GitHub Actions
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout code
@@ -53,7 +37,10 @@ jobs:
       - name: Install Extra CLI Tools
         uses: taiki-e/install-action@v2
         with:
-          tool: sea-orm-cli,cargo-tarpaulin
+          tool: sea-orm-cli,cargo-tarpaulin,cargo-lambda
+
+      - name: Install Zig via pip
+        run: pip3 install ziglang
 
       - name: Check Rust format
         run: cargo fmt -- --check
@@ -64,18 +51,49 @@ jobs:
       - name: Cargo clippy lint check
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+      - name: 結合テスト用Dockerネットワークの作成
+        run: |
+          docker network inspect integration-test-network >/dev/null 2>&1 \
+          || docker network create integration-test-network
+
+      - name: PostgreSQLの起動
+        run: |
+          for attempt in {1..3}; do
+            if docker run --rm --name postgres \
+              --network integration-test-network \
+              -e POSTGRES_PASSWORD=postgres \
+              -e POSTGRES_USER=postgres \
+              -e POSTGRES_DB=postgres \
+              -p 5432:5432 \
+              -d postgres:16-alpine; then
+              break
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "PostgreSQLコンテナの起動に3回失敗しました。"
+              exit 1
+            fi
+
+            echo "PostgreSQLコンテナの起動に失敗しました。5秒後に再試行します。（${attempt}/3）"
+            docker rm -f postgres >/dev/null 2>&1 || true
+            sleep 5
+          done
+          until docker exec postgres pg_isready -U postgres -d postgres; do
+            sleep 1
+          done
+
       - name: Run Liquibase migrations
         run: |
           docker run --rm \
             -e LIQUIBASE_HUB_MODE=off \
             -e JAVA_OPTS="-DLAMBDA_ROLE=local -DAWS_ACCOUNT_ID=123456789012" \
-            --network host \
+            --network integration-test-network \
             -v "${{ github.workspace }}:/workspace" \
             liquibase/liquibase:4.33.0 \
             --search-path=/workspace \
             --changelog-file=db/liquibase/changelog.xml \
             --contexts=local \
-            --url=jdbc:postgresql://localhost:5432/postgres \
+            --url=jdbc:postgresql://postgres:5432/postgres \
             --username=postgres \
             --password=postgres \
             update
@@ -93,3 +111,13 @@ jobs:
           sam validate --lint --template-file api/template.yaml
           sam validate --lint --template-file db/template.yaml
           sam validate --lint --template-file retained/template.yaml
+
+      - name: SAM アプリケーションのビルド
+        env:
+          CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
+        run: |
+          sam build --template-file api/template.yaml
+
+      - name: sam local start-api による結合テストの実行
+        run: |
+          bash integration-test/run-integration-tests.sh

@@ -1,0 +1,30 @@
+{
+  "version": "2.0",
+  "routeKey": "GET /api/v1/inquiries",
+  "rawPath": "/api/v1/inquiries",
+  "rawQueryString": "",
+  "headers": {
+    "accept": "*/*",
+    "host": "localhost",
+    "user-agent": "CustomUserAgent"
+  },
+  "requestContext": {
+    "accountId": "123456789012",
+    "apiId": "api-id",
+    "domainName": "localhost",
+    "domainPrefix": "localhost",
+    "http": {
+      "method": "GET",
+      "path": "/api/v1/inquiries",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "CustomUserAgent"
+    },
+    "requestId": "id",
+    "routeKey": "GET /api/v1/inquiries",
+    "stage": "$default",
+    "time": "12/Mar/2026:00:00:00 +0000",
+    "timeEpoch": 1773273600000
+  },
+  "isBase64Encoded": false
+}

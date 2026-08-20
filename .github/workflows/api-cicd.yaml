@@ -27,7 +27,7 @@ jobs:
     name: validate
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     services:
       postgres:
         image: postgres:16-alpine
@@ -94,9 +94,16 @@ jobs:
       - name: cargo-lambdaのインストール
         run: pip install cargo-lambda
 
+      - name: SAM build と sam local invoke によるLambdaテスト
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-3
+        run: |
+          sam build --template-file api/template.yaml
+          sam local invoke ApiFunction -e api/events/event.json --parameter-overrides DbConnectLambdaRole="arn:aws:iam::123456789012:role/test" DSQLEndpoint="test.dsql.ap-northeast-3.on.aws"
+
       - name: OpenAPI仕様書の生成と差分確認
         run: |
-          cargo build --bin api-lambda-bootstrap --release 2>/dev/null || true
+          cargo build --bin bootstrap --release 2>/dev/null || true
           if cargo build --bin openapi-export 2>/dev/null; then
             ./target/release/openapi-export > api/openapi.yaml
           else
@@ -126,7 +133,7 @@ jobs:
       github.event_name == 'push' &&
       github.actor != 'github-actions[bot]' &&
       (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref == 'refs/heads/release' && 'release' || 'develop' }}
     permissions:
       id-token: write
