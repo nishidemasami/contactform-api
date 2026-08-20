@@ -38,7 +38,7 @@ else
   sam local start-api \
     --template "${TEMPLATE_FILE}" \
     --env-vars "${ENV_VARS}" \
-    --docker-network host \
+    --docker-network "$DOCKER_NETWORK" \
     --host "${HOST}" \
     --port "${PORT}" \
     --warm-containers LAZY > "${SCRIPT_DIR}/sam-api.log" 2>&1 &

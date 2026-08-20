@@ -104,5 +104,7 @@ jobs:
           sam build --template-file api/template.yaml
 
       - name: sam local start-api による結合テストの実行
+        env:
+          DOCKER_NETWORK: ${{ job.container.network }}
         run: |
           bash integration-test/run-integration-tests.sh
