@@ -38,12 +38,6 @@ use presentation::lambda::{inquiry_handler::handler, lambda_executor::lambda_exe
 use sea_orm::DatabaseConnection;
 use tokio::sync::OnceCell;
 
-/// DSQLエンドポイントのキャッシュ（Cold Start時に初期化）
-static DSQL_ENDPOINT: OnceCell<String> = OnceCell::const_new();
-
-/// AWSリージョンのキャッシュ（Cold Start時に初期化）
-static AWS_REGION: OnceCell<String> = OnceCell::const_new();
-
 /// DB接続のキャッシュ（Cold Start時に確立し、Hot Start時に再利用）
 static DATABASE_CONNECTION: OnceCell<DatabaseConnection> = OnceCell::const_new();
 
@@ -58,29 +52,21 @@ async fn main() -> Result<(), lambda_runtime::Error> {
 /// データベース設定を生成する（本番環境用：Aurora DSQL）
 #[cfg(not(feature = "local-dev"))]
 async fn get_database_config() -> DatabaseConfig {
-    let dsql_endpoint: &String = DSQL_ENDPOINT
-        .get_or_init(|| async {
-            match env::var("DSQL_ENDPOINT") {
-                Ok(value) => value,
-                Err(e) => {
-                    tracing::error!("DSQL_ENDPOINT 環境変数の取得に失敗しました: {:?}", e);
-                    panic!("Internal Server Error");
-                }
-            }
-        })
-        .await;
+    let dsql_endpoint: String = match env::var("DSQL_ENDPOINT") {
+        Ok(value) => value,
+        Err(e) => {
+            tracing::error!("DSQL_ENDPOINT 環境変数の取得に失敗しました: {:?}", e);
+            panic!("Internal Server Error");
+        }
+    };
 
-    let aws_region: &String = AWS_REGION
-        .get_or_init(|| async {
-            match env::var("AWS_REGION") {
-                Ok(value) => value,
-                Err(e) => {
-                    tracing::error!("AWS_REGION 環境変数の取得に失敗しました: {:?}", e);
-                    panic!("Internal Server Error");
-                }
-            }
-        })
-        .await;
+    let aws_region: String = match env::var("AWS_REGION") {
+        Ok(value) => value,
+        Err(e) => {
+            tracing::error!("AWS_REGION 環境変数の取得に失敗しました: {:?}", e);
+            panic!("Internal Server Error");
+        }
+    };
 
     tracing::info!("Aurora DSQL 設定で接続を開始します ({})", dsql_endpoint);
     DatabaseConfig::AuroraDSQL {
