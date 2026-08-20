@@ -29,8 +29,8 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: insertonly
-          POSTGRES_PASSWORD: insertonly
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
         ports:
           - 5432:5432
@@ -79,8 +79,8 @@ jobs:
             --changelog-file=db/liquibase/changelog.xml \
             --contexts=local \
             --url=jdbc:postgresql://localhost:5432/postgres \
-            --username=insertonly \
-            --password=insertonly \
+            --username=postgres \
+            --password=postgres \
             update
 
       - name: Run all workspace tests
