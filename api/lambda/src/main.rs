@@ -55,6 +55,68 @@ async fn main() -> Result<(), lambda_runtime::Error> {
     executor().await
 }
 
+/// データベース設定を生成する（本番環境用：Aurora DSQL）
+#[cfg(not(feature = "local-dev"))]
+async fn get_database_config() -> DatabaseConfig {
+    let dsql_endpoint: &String = DSQL_ENDPOINT
+        .get_or_init(|| async {
+            match env::var("DSQL_ENDPOINT") {
+                Ok(value) => value,
+                Err(e) => {
+                    tracing::error!("DSQL_ENDPOINT 環境変数の取得に失敗しました: {:?}", e);
+                    panic!("Internal Server Error");
+                }
+            }
+        })
+        .await;
+
+    let aws_region: &String = AWS_REGION
+        .get_or_init(|| async {
+            match env::var("AWS_REGION") {
+                Ok(value) => value,
+                Err(e) => {
+                    tracing::error!("AWS_REGION 環境変数の取得に失敗しました: {:?}", e);
+                    panic!("Internal Server Error");
+                }
+            }
+        })
+        .await;
+
+    tracing::info!("Aurora DSQL 設定で接続を開始します ({})", dsql_endpoint);
+    DatabaseConfig::AuroraDSQL {
+        role: "insertonly".into(),
+        endpoint: dsql_endpoint.as_str().to_string().into(),
+        region: aws_region.as_str().to_string().into(),
+    }
+}
+
+/// データベース設定を生成する（ローカル開発環境用：PostgreSQL）
+#[cfg(feature = "local-dev")]
+async fn get_database_config() -> DatabaseConfig {
+    // ローカル実行時は未設定パニックを防ぐため、デフォルト値（または host.docker.internal）をフォールバックに設定
+    let host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "host.docker.internal".to_string());
+    let port = env::var("POSTGRES_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(5432);
+    let database = env::var("POSTGRES_DB").unwrap_or_else(|_| "postgres".to_string());
+    let username = env::var("POSTGRES_USER").unwrap_or_else(|_| "insertonly".to_string());
+    let password = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "insertonly".to_string());
+
+    tracing::info!(
+        "ローカル PostgreSQL 設定で接続を開始します ({}:{})",
+        host,
+        port
+    );
+    DatabaseConfig::PostgreSQL {
+        host: host.into(),
+        port,
+        database: database.into(),
+        username: username.into(),
+        password: password.into(),
+    }
+}
+
 /// Lambda 処理の実態
 ///
 /// DSQL 接続を初期化し、Lambda ランタイムへ HTTP ハンドラを登録する。
@@ -65,7 +127,6 @@ async fn main() -> Result<(), lambda_runtime::Error> {
 /// - DB接続の初期化に失敗した場合も即座に `panic!` する
 async fn executor() -> Result<(), lambda_runtime::Error> {
     // INITフェーズここから
-    // INITフェーズは最大10000ms。Cold Startの初回はCPUのブースト枠が与えられるので、この間に重い処理を済ませておく。
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_target(false)
@@ -74,64 +135,9 @@ async fn executor() -> Result<(), lambda_runtime::Error> {
 
     let db: &DatabaseConnection = DATABASE_CONNECTION
         .get_or_init(|| async {
-            let config = if let Ok(host) = env::var("POSTGRES_HOST") {
-                let port = env::var("POSTGRES_PORT")
-                    .ok()
-                    .and_then(|p| p.parse().ok())
-                    .unwrap_or(5432);
-                let database = env::var("POSTGRES_DB").unwrap_or_else(|_| "postgres".to_string());
-                let username =
-                    env::var("POSTGRES_USER").unwrap_or_else(|_| "insertonly".to_string());
-                let password =
-                    env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "insertonly".to_string());
-
-                tracing::info!(
-                    "ローカル PostgreSQL 設定で接続を開始します ({}:{})",
-                    host,
-                    port
-                );
-                DatabaseConfig::PostgreSQL {
-                    host: host.into(),
-                    port,
-                    database: database.into(),
-                    username: username.into(),
-                    password: password.into(),
-                }
-            } else {
-                let dsql_endpoint: &String = DSQL_ENDPOINT
-                    .get_or_init(|| async {
-                        match env::var("DSQL_ENDPOINT") {
-                            Ok(value) => value,
-                            Err(e) => {
-                                tracing::error!(
-                                    "DSQL_ENDPOINT 環境変数の取得に失敗しました: {:?}",
-                                    e
-                                );
-                                panic!("Internal Server Error");
-                            }
-                        }
-                    })
-                    .await;
-
-                let aws_region: &String = AWS_REGION
-                    .get_or_init(|| async {
-                        match env::var("AWS_REGION") {
-                            Ok(value) => value,
-                            Err(e) => {
-                                tracing::error!("AWS_REGION 環境変数の取得に失敗しました: {:?}", e);
-                                panic!("Internal Server Error");
-                            }
-                        }
-                    })
-                    .await;
-
-                tracing::info!("Aurora DSQL 設定で接続を開始します ({})", dsql_endpoint);
-                DatabaseConfig::AuroraDSQL {
-                    role: "insertonly".into(),
-                    endpoint: dsql_endpoint.as_str().to_string().into(),
-                    region: aws_region.as_str().to_string().into(),
-                }
-            };
+            // 条件付きコンパイル（cfgマクロ）により、ビルドフラグに応じて
+            // 本番用、またはローカル用のいずれかの get_database_config が呼び出されます
+            let config = get_database_config().await;
 
             create_connection(&config).await.unwrap_or_else(|e| {
                 tracing::error!("データベース接続の初期化に失敗しました: {:?}", e);
@@ -143,7 +149,6 @@ async fn executor() -> Result<(), lambda_runtime::Error> {
     // INITフェーズここまで
 
     // INVOKEフェーズここから
-    // Hot StartではCold Startで作成した共有済みコネクションをcloneしてHTTPハンドラを実行する。
     lambda_executor(|event| {
         let repository: Arc<dyn InquiryRepository> =
             Arc::new(SeaOrmInquiryRepository::new(db.clone()));

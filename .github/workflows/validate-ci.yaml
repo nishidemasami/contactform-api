@@ -98,6 +98,8 @@ jobs:
           sam validate --lint --template-file retained/template.yaml
 
       - name: SAM アプリケーションのビルド
+        env:
+          CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
         run: |
           sam build --template-file api/template.yaml
 
