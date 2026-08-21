@@ -102,10 +102,7 @@ jobs:
       - name: Install Extra CLI Tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-lambda
-
-      - name: Install Zig via pip3 (System Force)
-        run: pip3 install ziglang --break-system-packages
+          tool: cargo-lambda,zig
 
       - name: 結合テスト用Dockerネットワークの作成とPostgreSQLの接続
         run: |
