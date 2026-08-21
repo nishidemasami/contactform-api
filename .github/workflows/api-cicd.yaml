@@ -58,8 +58,8 @@ jobs:
       - name: AWS SAM CLIのセットアップ
         uses: aws-actions/setup-sam@v3
 
-      - name: Install Zig via pip3 (System Force)
-        run: pip3 install ziglang --break-system-packages
+      - name: Install Zig and cargo-lambda via pip3 (System Force)
+        run: pip3 install ziglang cargo-lambda --break-system-packages
 
       - name: cargo fmt -- --check の実行
         run: cargo fmt -- --check
@@ -93,9 +93,6 @@ jobs:
         env:
           AWS_DEFAULT_REGION: ap-northeast-3
         run: sam validate --lint --template-file api/template.yaml
-
-      - name: cargo-lambdaのインストール
-        run: pip install cargo-lambda
 
       - name: SAM build と sam local invoke によるLambdaテスト
         env:
@@ -173,13 +170,12 @@ jobs:
 
       - name: sam build の実行
         working-directory: api
-        run: sam build --template-file api/template.yaml
+        run: sam build
 
       - name: sam deploy の実行
         working-directory: api
         run: |
           sam deploy \
-            --template-file api/template.yaml \
             --stack-name "${{ steps.info.outputs.service_name }}-api-${{ steps.info.outputs.stage }}" \
             --role-arn "${{ secrets.SAM_DEPLOY_ROLE_ARN }}" \
             --parameter-overrides \

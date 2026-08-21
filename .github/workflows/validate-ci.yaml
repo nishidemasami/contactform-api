@@ -113,10 +113,11 @@ jobs:
           sam validate --lint --template-file retained/template.yaml
 
       - name: SAM アプリケーションのビルド
+        working-directory: api
         env:
           CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
         run: |
-          sam build --template-file api/template.yaml
+          sam build
 
       - name: sam local start-api による結合テストの実行
         run: |
