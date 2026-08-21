@@ -18,6 +18,7 @@ on:
       - "docs/**"
       - "frontend/**"
       - "review/**"
+      - "integration-test/**"
       - ".github/workflows/review-cicd.yaml"
 
 concurrency:
@@ -105,6 +106,26 @@ jobs:
       - name: カバレッジレポートの生成
         run: cargo tarpaulin --out Html -- --include-ignored
 
+      - name: cargo-lambdaおよびPython依存関係のインストール
+        run: pip3 install ziglang cargo-lambda pytest allure-pytest requests psycopg2-binary
+
+      - name: SAM アプリケーションのビルド
+        env:
+          CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
+        run: |
+          sam build --template-file api/template.yaml
+
+      - name: sam local start-api による結合テストの実行
+        run: |
+          bash integration-test/run-integration-tests.sh
+
+      - name: Allureレポートの生成
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        with:
+          allure_results: allure-results
+          allure_history: allure-history
+
       - name: Rustドキュメントの生成
         run: cargo doc --no-deps
 
@@ -158,6 +179,12 @@ jobs:
             <li><a target="_blank" href="./rapidoc/index.html">API仕様書(RapiDoc)</a></li>
           </ul>
 
+          ### 結合テストドキュメント
+
+          <ul>
+            <li><a target="_blank" href="./integration-tests/index.html">結合テストレポート(Allure)</a></li>
+          </ul>
+
           ### フロントエンドドキュメント
 
           <ul>
@@ -174,13 +201,14 @@ jobs:
 
       - name: レビュー資料の収集
         run: |
-          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc
+          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc review-output/integration-tests
           cp -r docs/_book/. review-output/
           cp tarpaulin-report.html review-output/coverage/tarpaulin-report.html
           cp -r target/doc/. review-output/rust-doc/
           cp api/openapi.yaml review-output/
           cp -r frontend/storybook-static/. review-output/storybook/
           cp -r frontend/typedoc/. review-output/typedoc/
+          cp -r allure-history/. review-output/integration-tests/
 
       - name: Generate Stoplight Elements
         run: |
