@@ -172,11 +172,9 @@ jobs:
           echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
 
       - name: sam build の実行
-        working-directory: api
         run: sam build --template-file api/template.yaml
 
       - name: sam deploy の実行
-        working-directory: api
         run: |
           sam deploy \
             --template-file api/template.yaml \
