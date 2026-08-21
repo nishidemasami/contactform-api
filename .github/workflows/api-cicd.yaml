@@ -99,12 +99,16 @@ jobs:
           AWS_DEFAULT_REGION: ap-northeast-3
         run: sam validate --lint --template-file api/template.yaml
 
+      - name: Install Rust target for ARM64
+        run: rustup target add aarch64-unknown-linux-gnu
+
       - name: SAM build と sam local invoke によるLambdaテスト
+        working-directory: api
         env:
           AWS_DEFAULT_REGION: ap-northeast-3
         run: |
-          sam build --template-file api/template.yaml
-          sam local invoke ApiFunction -e api/events/event.json --parameter-overrides DbConnectLambdaRole="arn:aws:iam::123456789012:role/test" DSQLEndpoint="test.dsql.ap-northeast-3.on.aws"
+          sam build
+          sam local invoke ApiFunction -e events/event.json --parameter-overrides DbConnectLambdaRole="arn:aws:iam::123456789012:role/test" DSQLEndpoint="test.dsql.ap-northeast-3.on.aws"
 
       - name: OpenAPI仕様書の生成と差分確認
         run: |
@@ -177,6 +181,9 @@ jobs:
             echo "stage=release" >> "$GITHUB_OUTPUT"
           fi
           echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust target for ARM64
+        run: rustup target add aarch64-unknown-linux-gnu
 
       - name: sam build の実行
         working-directory: api

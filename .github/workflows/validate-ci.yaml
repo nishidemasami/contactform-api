@@ -112,6 +112,9 @@ jobs:
           sam validate --lint --template-file db/template.yaml
           sam validate --lint --template-file retained/template.yaml
 
+      - name: Install Rust target for ARM64
+        run: rustup target add aarch64-unknown-linux-gnu
+
       - name: SAM アプリケーションのビルド
         working-directory: api
         env:
