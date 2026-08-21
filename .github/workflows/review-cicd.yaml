@@ -100,14 +100,16 @@ jobs:
             --password=postgres \
             update
 
-      - name: cargo-tarpaulinのインストール
-        run: cargo install cargo-tarpaulin --locked
+      - name: Install Extra CLI Tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin,cargo-lambda
 
       - name: カバレッジレポートの生成
         run: cargo tarpaulin --out Html -- --include-ignored
 
-      - name: cargo-lambdaおよびPython依存関係のインストール
-        run: pip3 install ziglang cargo-lambda pytest allure-pytest requests psycopg2-binary
+      - name: zigのインストール
+        run: pip install zig pytest allure-pytest requests psycopg2-binary
 
       - name: SAM アプリケーションのビルド
         working-directory: api

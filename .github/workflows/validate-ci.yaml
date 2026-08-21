@@ -39,8 +39,10 @@ jobs:
         with:
           tool: sea-orm-cli,cargo-tarpaulin,cargo-lambda
 
-      - name: Install Zig via pip3 (System Force)
-        run: pip3 install ziglang --break-system-packages
+      - name: Setup Zig
+        uses: goto-busstop/setup-zig@v2
+        with:
+          version: 0.16.0
 
       - name: Check Rust format
         run: cargo fmt -- --check

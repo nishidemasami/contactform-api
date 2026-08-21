@@ -58,8 +58,13 @@ jobs:
       - name: AWS SAM CLIのセットアップ
         uses: aws-actions/setup-sam@v3
 
-      - name: Install Zig and cargo-lambda via pip3 (System Force)
-        run: pip3 install ziglang cargo-lambda --break-system-packages
+      - name: Setup Zig
+        uses: goto-busstop/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: cargo-lambdaのインストール
+        run: pip install cargo-lambda
 
       - name: cargo fmt -- --check の実行
         run: cargo fmt -- --check
@@ -146,8 +151,13 @@ jobs:
       - name: Rustツールチェーンのセットアップ
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Zig via pip3 and cargo-lambda (System Force)
-        run: pip3 install ziglang cargo-lambda --break-system-packages
+      - name: Setup Zig
+        uses: goto-busstop/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: cargo-lambdaのインストール
+        run: pip install cargo-lambda
 
       - name: AWSクレデンシャルの設定
         uses: aws-actions/configure-aws-credentials@v4
