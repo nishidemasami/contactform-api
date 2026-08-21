@@ -130,11 +130,10 @@ jobs:
         run: pip install ziglang pytest allure-pytest requests psycopg2-binary
 
       - name: SAM アプリケーションのビルド
-        working-directory: api
         env:
           CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
         run: |
-          sam build
+          sam build --template-file api/template.yaml
 
       - name: sam local start-api による結合テストの実行
         run: |
