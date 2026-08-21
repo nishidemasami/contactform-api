@@ -141,13 +141,9 @@ jobs:
 
       - name: Allureレポートの生成
         uses: simple-elf/allure-report-action@master
-        if: always()
         with:
           allure_results: allure-results
           allure_history: allure-history
-          subfolder: .
-          keep_reports: 1
-          gh_pages: ./
 
       - name: Rustドキュメントの生成
         run: cargo doc --no-deps
@@ -233,8 +229,7 @@ jobs:
           cp api/openapi.yaml review-output/
           cp -r frontend/storybook-static/. review-output/storybook/
           cp -r frontend/typedoc/. review-output/typedoc/
-          cp -r allure-history/. review-output/integration-tests/allure-history/
-          cp -r allure-results/. review-output/integration-tests/allure-results/
+          cp -r allure-history/${{ github.run_number }}/. review-output/integration-tests/
 
       - name: Generate Stoplight Elements
         run: |
