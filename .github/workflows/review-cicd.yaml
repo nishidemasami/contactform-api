@@ -145,6 +145,9 @@ jobs:
         with:
           allure_results: allure-results
           allure_history: allure-history
+          subfolder: .
+          keep_reports: 1
+          gh_pages: ./
 
       - name: Rustドキュメントの生成
         run: cargo doc --no-deps
@@ -223,14 +226,15 @@ jobs:
 
       - name: レビュー資料の収集
         run: |
-          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc review-output/integration-tests
+          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc review-output/integration-tests/allure-history review-output/integration-tests/allure-results
           cp -r docs/_book/. review-output/
           cp tarpaulin-report.html review-output/coverage/tarpaulin-report.html
           cp -r target/doc/. review-output/rust-doc/
           cp api/openapi.yaml review-output/
           cp -r frontend/storybook-static/. review-output/storybook/
           cp -r frontend/typedoc/. review-output/typedoc/
-          cp -r allure-history/. review-output/integration-tests/
+          cp -r allure-history/. review-output/integration-tests/allure-history/
+          cp -r allure-results/. review-output/integration-tests/allure-results/
 
       - name: Generate Stoplight Elements
         run: |
