@@ -108,8 +108,8 @@ jobs:
       - name: カバレッジレポートの生成
         run: cargo tarpaulin --out Html -- --include-ignored
 
-      - name: zigのインストール
-        run: pip install zig pytest allure-pytest requests psycopg2-binary
+      - name: ziglang pytest allure-pytest requests psycopg2-binaryのインストール
+        run: pip install ziglang pytest allure-pytest requests psycopg2-binary
 
       - name: SAM アプリケーションのビルド
         working-directory: api

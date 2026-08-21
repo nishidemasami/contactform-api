@@ -39,10 +39,8 @@ jobs:
         with:
           tool: sea-orm-cli,cargo-tarpaulin,cargo-lambda
 
-      - name: Setup Zig
-        uses: goto-busstop/setup-zig@v2
-        with:
-          version: 0.16.0
+      - name: ziglangのインストール
+        run: pip install ziglang
 
       - name: Check Rust format
         run: cargo fmt -- --check
