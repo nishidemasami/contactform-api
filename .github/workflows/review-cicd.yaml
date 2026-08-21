@@ -33,7 +33,7 @@ permissions:
 jobs:
   validate:
     name: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: リポジトリのチェックアウト
         uses: actions/checkout@v4
@@ -133,7 +133,7 @@ jobs:
         env:
           CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
         run: |
-          sam build --template-file api/template.yaml --parameter-overrides Architecture=x86_64
+          sam build --template-file api/template.yaml
 
       - name: sam local start-api による結合テストの実行
         run: |
@@ -217,7 +217,9 @@ jobs:
       - name: docsディレクトリをHTMLに変換
         working-directory: docs
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v .:/honkit ghcr.io/nishidemasami/markdown-docs:v1.2.3 npx honkit build
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends calibre nodejs npm chromium git unzip xdg-utils libegl1 libopengl0
+          npm install -g honkit gitbook-plugin-uml gitbook-plugin-katex-pro honkit-plugin-prism highlight.js gitbook-plugin-hide-published-with gitbook-plugin-intopic-toc gitbook-plugin-sunlight-highlighter gitbook-plugin-hints gitbook-plugin-atoc gitbook-plugin-advanced-emoji gitbook-plugin-collapsible-chapters honkit-plugin-plantuml-server
+          npx honkit build
 
       - name: レビュー資料の収集
         run: |
