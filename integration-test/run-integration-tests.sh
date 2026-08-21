@@ -38,17 +38,19 @@ if curl -s "${BASE_URL}/api/v1/inquiries" >/dev/null 2>&1; then
   echo "SAM APIは既に ${BASE_URL} で稼働中です。"
 else
   echo "sam local start-api を起動しています (ポート: ${PORT})..."
-  (
-    cd "${PROJECT_ROOT}/api"
-    sam local start-api \
-      --template "${TEMPLATE_FILE}" \
-      --env-vars "${ENV_VARS}" \
-      --docker-network integration-test-network \
-      --host "${HOST}" \
-      --port "${PORT}" \
-      --warm-containers LAZY) > "${SCRIPT_DIR}/sam-api.log" 2>&1 &
+  cd "${PROJECT_ROOT}/api"
+  sam local start-api \
+    --template "${TEMPLATE_FILE}" \
+    --env-vars "${ENV_VARS}" \
+    --docker-network integration-test-network \
+    --host "${HOST}" \
+    --port "${PORT}" \
+    --warm-containers LAZY > "${SCRIPT_DIR}/sam-api.log" 2>&1 &
   SAM_PID=$!
   SAM_STARTED=1
+
+  # 元の作業ディレクトリに戻る
+  cd "${SCRIPT_DIR}"
 
   echo "APIサーバーの起動を待機しています..."
   MAX_RETRIES=30

@@ -127,7 +127,7 @@ jobs:
         run: cargo tarpaulin --out Html -- --include-ignored
 
       - name: ziglang pytest allure-pytest requests psycopg2-binaryのインストール
-        run: pip install ziglang pytest allure-pytest requests psycopg2-binary
+        run: pip install ziglang pytest allure-pytest requests psycopg2-binary --break-system-packages
 
       - name: SAM アプリケーションのビルド
         env:
@@ -145,6 +145,8 @@ jobs:
         with:
           allure_results: allure-results
           allure_history: allure-history
+          subfolder: .
+          keep_reports: 1
 
       - name: Rustドキュメントの生成
         run: cargo doc --no-deps
