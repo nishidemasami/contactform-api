@@ -27,7 +27,7 @@ jobs:
     name: validate
     permissions:
       contents: write
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
@@ -99,9 +99,6 @@ jobs:
           AWS_DEFAULT_REGION: ap-northeast-3
         run: sam validate --lint --template-file api/template.yaml
 
-      - name: Install Rust target for ARM64
-        run: rustup target add aarch64-unknown-linux-gnu
-
       - name: SAM build と sam local invoke によるLambdaテスト
         working-directory: api
         env:
@@ -142,7 +139,7 @@ jobs:
       github.event_name == 'push' &&
       github.actor != 'github-actions[bot]' &&
       (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/release' && 'release' || 'develop' }}
     permissions:
       id-token: write
@@ -181,9 +178,6 @@ jobs:
             echo "stage=release" >> "$GITHUB_OUTPUT"
           fi
           echo "service_name=contactform-api-public" >> "$GITHUB_OUTPUT"
-
-      - name: Install Rust target for ARM64
-        run: rustup target add aarch64-unknown-linux-gnu
 
       - name: sam build の実行
         working-directory: api
