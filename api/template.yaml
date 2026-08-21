@@ -61,6 +61,7 @@ Resources:
       BuildMethod: rust-cargolambda
       BuildProperties:
         Binary: bootstrap
+        Compiler: cargo
 
   # API Gateway HTTP API
   HttpApi:
