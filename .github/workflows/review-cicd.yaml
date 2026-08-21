@@ -99,6 +99,40 @@ jobs:
             --password=postgres \
             update
 
+      - name: Install Extra CLI Tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-lambda
+
+      - name: Install Zig via pip3 (System Force)
+        run: pip3 install ziglang --break-system-packages
+
+      - name: 結合テスト用Dockerネットワークの作成とPostgreSQLの接続
+        run: |
+          docker network create integration-test-network || true
+          POSTGRES_CONTAINER=$(docker ps --filter "ancestor=postgres:16-alpine" --format "{{.ID}}")
+          if [ -n "$POSTGRES_CONTAINER" ]; then
+            docker network connect integration-test-network $POSTGRES_CONTAINER --alias postgres || true
+          fi
+
+      - name: SAM アプリケーションのビルド
+        env:
+          CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
+        run: |
+          sam build --template-file api/template.yaml
+
+      - name: sam local start-api による結合テストの実行
+        run: |
+          mkdir -p allure-results
+          bash integration-test/run-integration-tests.sh > allure-results/integration-test-results.xml
+
+      - name: 結合テストレポートの生成 (Allure Report)
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        with:
+          allure_results: allure-results
+          allure_report: allure-report
+
       - name: cargo-tarpaulinのインストール
         run: cargo install cargo-tarpaulin --locked
 
@@ -156,6 +190,7 @@ jobs:
             <li><a target="_blank" href="./openapi.yaml">OpenAPI仕様</a></li>
             <li><a target="_blank" href="./stoplight/index.html">API仕様書(Stoplight Elements)</a></li>
             <li><a target="_blank" href="./rapidoc/index.html">API仕様書(RapiDoc)</a></li>
+            <li><a target="_blank" href="./integration-tests/index.html">結合テストレポート</a></li>
           </ul>
 
           ### フロントエンドドキュメント
@@ -174,13 +209,14 @@ jobs:
 
       - name: レビュー資料の収集
         run: |
-          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc
+          mkdir -p review-output/coverage review-output/rust-doc review-output/storybook review-output/typedoc review-output/integration-tests
           cp -r docs/_book/. review-output/
           cp tarpaulin-report.html review-output/coverage/tarpaulin-report.html
           cp -r target/doc/. review-output/rust-doc/
           cp api/openapi.yaml review-output/
           cp -r frontend/storybook-static/. review-output/storybook/
           cp -r frontend/typedoc/. review-output/typedoc/
+          cp -r allure-report/. review-output/integration-tests/
 
       - name: Generate Stoplight Elements
         run: |
