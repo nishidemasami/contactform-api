@@ -31,7 +31,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.97.1
           components: clippy, rustfmt
 
       - name: Install Extra CLI Tools
@@ -39,7 +39,7 @@ jobs:
         with:
           tool: sea-orm-cli,cargo-tarpaulin,cargo-lambda
 
-      - name: Install Zig via pip3 (System Force)
+      - name: ziglangのインストール
         run: pip3 install ziglang --break-system-packages
 
       - name: Check Rust format
