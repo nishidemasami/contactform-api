@@ -133,7 +133,7 @@ jobs:
         env:
           CARGO_ENCODED_RUSTFLAGS: '--cfg=feature="local-dev"'
         run: |
-          sam build --template-file api/template.yaml
+          sam build --template-file api/template.yaml --parameter-overrides Architecture=x86_64
 
       - name: sam local start-api による結合テストの実行
         run: |
