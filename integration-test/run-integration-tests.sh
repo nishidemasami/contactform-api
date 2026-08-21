@@ -70,5 +70,5 @@ fi
 
 echo "=== Pytestによる結合テスト実行開始 ==="
 export BASE_URL="${BASE_URL}"
-pytest "${SCRIPT_DIR}/test_api.py" --alluredir=allure-results
+pytest "${SCRIPT_DIR}/test_api.py" --alluredir="${PROJECT_ROOT}/allure-results"
 echo "=== 全ての結合テストが正常に完了しました ==="
