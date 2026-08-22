@@ -1,6 +1,6 @@
 # GitHub設定
 
-> 最終更新: 2026-08-16 | ソース: raw/00000005_GitHub設定.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/github.md
 
 GitHubリポジトリの設定・構成規約。
 
@@ -20,7 +20,7 @@ GitHubリポジトリの設定・構成規約。
 | `/.github/workflows/` | CI/CDのGitHub Actions定義 |
 | `/README.md` | リポジトリ概要 |
 | `/AGENTS.md` | AI向けプロンプト（README.md参照を明記）|
-| `/BACKLOG.md` | バックログ・懸念事項・アイデア |
+| `/docs/raw/04_issues_and_backlog/backlog.md` | バックログ・懸念事項・アイデア |
 | `/api/` | APIサブシステム |
 | `/core/` | ビジネスロジック（shared library）|
 | `/db/` | DBサブシステム（Liquibase + SAM）|

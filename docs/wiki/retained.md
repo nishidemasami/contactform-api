@@ -1,6 +1,6 @@
 # retained サブシステム
 
-> 最終更新: 2026-08-16 | ソース: raw/00000009_フロントエンド規約と実装例.md, raw/00000003_インフラ規約と実装例.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/frontend.md, raw/02_conventions/infrastructure.md
 
 フロントエンドSPA・レビュー資料配信用の永続的インフラリソース（S3バケット）を管理するサブシステム。
 

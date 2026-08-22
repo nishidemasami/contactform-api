@@ -1,6 +1,6 @@
 # API規約
 
-> 最終更新: 2026-08-16 | ソース: raw/00000002_API規約と実装例.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/api.md, raw/03_examples/lambda_handler.md
 
 バックエンドAPI（AWS Lambda）の設計および実装に関する規約。
 

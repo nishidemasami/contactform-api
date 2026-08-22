@@ -1,6 +1,6 @@
 # DB規約（Liquibase・Aurora DSQL・SeaORM）
 
-> 最終更新: 2026-08-16 | ソース: raw/00000006_DB規約と実装例.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/database.md
 
 DBマイグレーション・スキーマ管理・SeaORMエンティティの規約。
 
