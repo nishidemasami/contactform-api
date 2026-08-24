@@ -12,6 +12,7 @@ const meta: Meta<typeof Toast> = {
     },
     onClose: { action: "closed" },
   },
+  parameters: { layout: "fullscreen" },
 };
 
 export default meta;

@@ -8,6 +8,7 @@ const meta: Meta<typeof TermsDialog> = {
   argTypes: {
     onClose: { action: "closed" },
   },
+  parameters: { layout: "fullscreen" },
 };
 
 export default meta;
