@@ -45,6 +45,8 @@ pub async fn handler(
     match route(&request) {
         Route::CreateInquiry => create_inquiry(repository, request).await,
 
+        Route::Options => json_response(200, &"{}"),
+
         Route::FindInquiries => json_response(
             501,
             &ErrorResponse {

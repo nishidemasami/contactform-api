@@ -359,7 +359,7 @@ jobs:
         run: |
           echo "" >> review-output/openapi.yaml
           echo "servers:" >> review-output/openapi.yaml
-          echo "- url: https://${{ steps.cloudformation_info.outputs.frontend_cloudfront_domain }}" >> review-output/openapi.yaml
+          echo "- url: https://${{ steps.cloudformation_info.outputs.review_cloudfront_domain }}" >> review-output/openapi.yaml
 
       - name: GitHub Deploymentの作成
         id: deployment
