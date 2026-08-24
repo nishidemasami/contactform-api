@@ -13,6 +13,14 @@ const meta: Meta<typeof Toast> = {
     onClose: { action: "closed" },
   },
   parameters: { layout: "fullscreen" },
+  // 👇 プレビュー領域に最低限の高さを確保するデコレーターを追加
+  decorators: [
+    (Story) => (
+      <div className="relative min-h-[200px] w-full">
+        <Story />
+      </div>
+    ),
+  ],
 };
 
 export default meta;

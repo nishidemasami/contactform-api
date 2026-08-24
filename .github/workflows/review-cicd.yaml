@@ -140,7 +140,8 @@ jobs:
           bash integration-test/run-integration-tests.sh
 
       - name: Allureレポートの生成
-        uses: simple-elf/allure-report-action@master
+        uses: simple-elf/allure-report-action@master14
+        if: always()
         with:
           allure_results: allure-results
           allure_history: allure-history
