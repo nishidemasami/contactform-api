@@ -1,6 +1,6 @@
 # CI/CD規約（GitHub Actions）
 
-> 最終更新: 2026-08-16 | ソース: raw/00000007_CICD規約と実装例.md, raw/00000006_DB規約と実装例.md, raw/00000009_フロントエンド規約と実装例.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/cicd.md, raw/02_conventions/database.md, raw/02_conventions/frontend.md
 
 GitHub ActionsによるCI/CDパイプラインの規約。
 

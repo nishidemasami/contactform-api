@@ -6,7 +6,7 @@
 
 `docs/` ディレクトリは以下の2つのサブディレクトリで構成されています。
 
-- **`raw/` (生情報)**: 人間が投入する一次情報（規約原文、要件定義、タスク管理など）。イミュータブル（読み取り専用）として扱います。
+- **`raw/` (生情報)**: 人間が投入する一次情報（規約原文、要件定義、タスク管理など）。イミュータブル（読み取り専用）として扱います。「要件 (01_requirements)」「規約 (02_conventions)」「実装例 (03_examples)」「課題・バックログ (04_issues_and_backlog)」の3大分類＋課題に整理・分割されています。
 - **`wiki/` (ウィキ)**: AIエージェントが `raw/` の情報を整理・統合・更新して維持管理するナレッジベース（LLM-WIKI）。
 
 ---
@@ -54,29 +54,32 @@
 
 ## raw ドキュメント一覧
 
-`./raw/` ディレクトリ配下に格納されている生情報ファイルの一覧と要約です。
+`./raw/` ディレクトリ配下に格納されている生情報ファイルの一覧と要約です（詳細およびファイルツリーは [docs/raw/README.md](./raw/README.md) を参照のこと）。
 
-- [00000001_コーディング規約と実装例.md](./raw/00000001_コーディング規約と実装例.md)
-  - **概要**: Rustの実装におけるコーディング規約、オニオン/クリーンアーキテクチャおよびDDD実装方針、型明記ルールなどを定めたドキュメント。
-- [00000002_API規約と実装例.md](./raw/00000002_API規約と実装例.md)
-  - **概要**: バックエンドAPI（AWS Lambda）の設計・実装規約。コールドスタート時間の極小化や128MBメモリ制限下での最適化設計について規定。
-- [00000003_インフラ規約と実装例.md](./raw/00000003_インフラ規約と実装例.md)
-  - **概要**: AWS SAMを用いたインフラ構築、サーバレスアーキテクチャ設計、CloudFormationリソース命名規則、IaCのベストプラクティスを定義。
-- [00000004_レビュー規約.md](./raw/00000004_レビュー規約.md)
-  - **概要**: プルリクエスト（PR）運用、自動テスト・カバレッジ計測、レビュー用プレビュー環境（S3静的配信）のデプロイプロセスに関する規約。
-- [00000005_GitHub設定.md](./raw/00000005_GitHub設定.md)
-  - **概要**: モノレポ構成の目的・構成案、AIによるスムーズなシステム開発と人間の開発参入障壁の最小化を目指すリポジトリ設定規約。
-- [00000006_DB規約と実装例.md](./raw/00000006_DB規約と実装例.md)
-  - **概要**: LiquibaseによるDBマイグレーション管理、Amazon Aurora DSQLおよびローカルPostgreSQLの環境別設定、SeaORM利用規約。
-- [00000007_CICD規約と実装例.md](./raw/00000007_CICD規約と実装例.md)
-  - **概要**: GitHub Actionsを用いたCI/CDパイプラインの全体設計、各種ワークフロー、自動テスト・品質検証・自動デプロイ規約。
-- [00000008_AWS規約と実装例.md](./raw/00000008_AWS規約と実装例.md)
-  - **概要**: AWS IAM設定、GitHub ActionsとのOIDC連携、SSMパラメータストアの命名規則・パラメータ体系を定めたドキュメント。
-- [00000009_フロントエンド規約と実装例.md](./raw/00000009_フロントエンド規約と実装例.md)
-  - **概要**: テスト用の静的SPAサイト（Next.js / TypeScript）の実装規約およびデプロイ方針（develop環境限定）。
-- [00000010_既知の問題.md](./raw/00000010_既知の問題.md)
-  - **概要**: AWS CloudFormationのスタック名文字数制限（最大128文字）や命名ルール等、システム構築における既知の制約事項。
-- [20260816_要件.md](./raw/20260816_要件.md)
-  - **概要**: コンタクトフォームからのPOSTを受け付ける問い合わせAPIの要件定義、およびテスト用静的SPAサイトの要件。
-- [BACKLOG.md](./raw/BACKLOG.md)
-  - **概要**: 考慮不足・未解決問題・外部パッケージ修正待ち等のTODOおよび課題を追跡するためのバックログ。
+### 1. 要件 (`./raw/01_requirements/`)
+- [system.md](./raw/01_requirements/system.md): 全体システム要件・サービス名・開発フロー・SSMパラメータ命名方針
+- [api.md](./raw/01_requirements/api.md): 問い合わせAPI機能要件
+- [frontend_and_review.md](./raw/01_requirements/frontend_and_review.md): テスト用フロントエンドおよびレビュー資料要件
+
+### 2. 規約 (`./raw/02_conventions/`)
+- [coding.md](./raw/02_conventions/coding.md): Rustコーディング規約・DDD設計原則
+- [api.md](./raw/02_conventions/api.md): バックエンドAPI設計・INSERT専用権限・コールドスタート最適化規約
+- [infrastructure.md](./raw/02_conventions/infrastructure.md): AWS SAM・サーバレスアーキテクチャ設計規約
+- [database.md](./raw/02_conventions/database.md): Liquibase・Aurora DSQL/PostgreSQL運用・ロール権限規約
+- [cicd.md](./raw/02_conventions/cicd.md): GitHub Actions CI/CD パイプライン設計規約
+- [aws_iam.md](./raw/02_conventions/aws_iam.md): AWS IAM & OIDC 連携規約
+- [frontend.md](./raw/02_conventions/frontend.md): フロントエンド開発・セキュリティ規約
+- [review_process.md](./raw/02_conventions/review_process.md): PR・自動レビュー資料作成運用規約
+- [github.md](./raw/02_conventions/github.md): モノレポ構造・リポジトリ設定規約
+
+### 3. 実装例 (`./raw/03_examples/`)
+- [rust_ddd.md](./raw/03_examples/rust_ddd.md): Rust DDD レイヤー別実装例・`Cargo.toml`
+- [lambda_handler.md](./raw/03_examples/lambda_handler.md): AWS Lambda エントリーポイント実装例
+- [sam_templates.md](./raw/03_examples/sam_templates.md): AWS SAM `template.yaml` 各種実装例
+- [liquibase_and_seaorm.md](./raw/03_examples/liquibase_and_seaorm.md): Liquibase changelog/sql & SeaORM Entity実装例
+- [github_actions_workflows.md](./raw/03_examples/github_actions_workflows.md): GitHub Actions ワークフロー実装例
+- [aws_oidc_policy.md](./raw/03_examples/aws_oidc_policy.md): AWS IAM OIDC ポリシー実装例
+
+### 4. 課題・バックログ (`./raw/04_issues_and_backlog/`)
+- [known_issues.md](./raw/04_issues_and_backlog/known_issues.md): 既知の課題・制約事項
+- [backlog.md](./raw/04_issues_and_backlog/backlog.md): バックログ・TODO一覧

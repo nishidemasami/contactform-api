@@ -51,17 +51,18 @@
 
 ## ソース対応表
 
-| `docs/raw/` ファイル | 対応するウィキページ |
+| `docs/raw/` ディレクトリ / ファイル | 対応するウィキページ |
 |---|---|
-| `20260816_要件.md` | overview.md, requirements.md, aws-settings.md, coding-conventions.md |
-| `00000001_コーディング規約と実装例.md` | coding-conventions.md |
-| `00000002_API規約と実装例.md` | api.md |
-| `00000003_インフラ規約と実装例.md` | infrastructure.md, aws-settings.md |
-| `00000004_レビュー規約.md` | review-process.md, cicd.md |
-| `00000005_GitHub設定.md` | github-settings.md, overview.md |
-| `00000006_DB規約と実装例.md` | database.md, cicd.md |
-| `00000007_CICD規約と実装例.md` | cicd.md |
-| `00000008_AWS規約と実装例.md` | aws-settings.md |
-| `00000009_フロントエンド規約と実装例.md` | frontend.md, cicd.md, infrastructure.md |
-| `00000010_既知の問題.md` | known-issues.md |
-| `BACKLOG.md` | backlog.md |
+| `01_requirements/system.md`, `api.md`, `frontend_and_review.md` | overview.md, requirements.md, aws-settings.md |
+| `02_conventions/coding.md` | coding-conventions.md |
+| `02_conventions/api.md` | api.md |
+| `02_conventions/infrastructure.md` | infrastructure.md, aws-settings.md |
+| `02_conventions/database.md` | database.md, cicd.md |
+| `02_conventions/cicd.md` | cicd.md |
+| `02_conventions/aws_iam.md` | aws-settings.md |
+| `02_conventions/frontend.md` | frontend.md, cicd.md |
+| `02_conventions/review_process.md` | review-process.md, cicd.md |
+| `02_conventions/github.md` | github-settings.md, overview.md |
+| `03_examples/*` | coding-conventions.md, api.md, infrastructure.md, database.md, cicd.md, aws-settings.md |
+| `04_issues_and_backlog/known_issues.md` | known-issues.md |
+| `04_issues_and_backlog/backlog.md` | backlog.md |

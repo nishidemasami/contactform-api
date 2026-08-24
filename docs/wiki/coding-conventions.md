@@ -1,6 +1,6 @@
 # コーディング規約（Rust）
 
-> 最終更新: 2026-08-16 | ソース: raw/00000001_コーディング規約と実装例.md, raw/20260816_要件.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/coding.md, raw/01_requirements/system.md
 
 Rustの実装時のコーディング規約・アーキテクチャ方針・DDD実装方針を定める。
 

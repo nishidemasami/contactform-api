@@ -1,6 +1,6 @@
 # AWS設定・SSMパラメータ体系
 
-> 最終更新: 2026-08-16 | ソース: raw/00000008_AWS規約と実装例.md, raw/20260816_要件.md, raw/00000003_インフラ規約と実装例.md
+> 最終更新: 2026-08-16 | ソース: raw/02_conventions/aws_iam.md, raw/01_requirements/system.md, raw/02_conventions/infrastructure.md
 
 AWSのIAM設定、OIDC連携、SSMパラメータ命名規則をまとめる。
 

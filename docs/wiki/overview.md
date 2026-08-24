@@ -1,6 +1,6 @@
 # プロジェクト全体概要
 
-> 最終更新: 2026-08-16 | ソース: raw/20260816_要件.md, raw/00000005_GitHub設定.md, raw/00000003_インフラ規約と実装例.md
+> 最終更新: 2026-08-16 | ソース: raw/01_requirements/system.md, raw/02_conventions/github.md, raw/02_conventions/infrastructure.md
 
 `contactform-api` は、コンタクトフォーム（<https://nishidemasami.github.io/contact/index.html>）からのPOSTを受け付ける問い合わせAPIである。
 AIによる開発を前提に、モノレポ構成でインフラ・アプリ・ドキュメントを一元管理する。
@@ -64,7 +64,7 @@ AIによる開発を前提に、モノレポ構成でインフラ・アプリ・
   ├── .github/workflows/  CI/CD定義
   ├── README.md           概要
   ├── AGENTS.md           AI向けプロンプト
-  ├── BACKLOG.md          バックログ・懸念事項
+  ├── docs/raw/04_issues_and_backlog/backlog.md バックログ・懸念事項
   ├── api/                APIサブシステム
   ├── core/               ビジネスロジック（共有ライブラリ）
   │   ├── domain/

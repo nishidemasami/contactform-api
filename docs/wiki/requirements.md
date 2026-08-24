@@ -1,6 +1,6 @@
 # 要件定義
 
-> 最終更新: 2026-08-16 | ソース: raw/20260816_要件.md
+> 最終更新: 2026-08-16 | ソース: raw/01_requirements/system.md, raw/01_requirements/api.md, raw/01_requirements/frontend_and_review.md
 
 コンタクトフォーム APIの要件定義をまとめる。
 

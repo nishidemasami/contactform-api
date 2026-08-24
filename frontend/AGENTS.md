@@ -1,2 +1,1 @@
-コーディング規約として`./coding-guidelines.md`を参照。
-実装で迷った場合には`docs/raw/00000009_フロントエンド規約と実装例.md`を実装例として参考にする。
+実装で迷った場合には`docs/raw/02_conventions/frontend.md`および`docs/raw/01_requirements/frontend_and_review.md`を実装例として参考にする。

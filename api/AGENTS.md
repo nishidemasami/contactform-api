@@ -1,2 +1,1 @@
-コーディング規約として`./coding-guidelines.md`を参照。
-実装で迷った場合には`docs/raw/00000001_コーディング規約と実装例.md`を実装例として参考にする。
+実装で迷った場合には`docs/raw/02_conventions/api.md`および`docs/raw/03_examples/lambda_handler.md`を実装例として参考にする。
