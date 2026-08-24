@@ -8,6 +8,15 @@ const meta: Meta<typeof TermsDialog> = {
   argTypes: {
     onClose: { action: "closed" },
   },
+  parameters: { layout: "fullscreen" },
+  // 👇 プレビュー領域に最低限の高さを確保するデコレーターを追加
+  decorators: [
+    (Story) => (
+      <div className="relative min-h-[800px] w-full">
+        <Story />
+      </div>
+    ),
+  ],
 };
 
 export default meta;

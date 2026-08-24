@@ -4,6 +4,9 @@ Description: >
   api subsystem - API Gateway HTTP API + Lambda関数
 
 Parameters:
+  LambdaArchitecture:
+    Type: String
+    Default: arm64
   ServiceName:
     Type: String
     Default: contactform-api-public
@@ -43,7 +46,7 @@ Resources:
       Handler: bootstrap
       Runtime: provided.al2023
       Architectures:
-        - arm64
+        - !Ref LambdaArchitecture
       Timeout: 10
       MemorySize: 128
       Role: !Ref DbConnectLambdaRole
@@ -61,6 +64,7 @@ Resources:
       BuildMethod: rust-cargolambda
       BuildProperties:
         Binary: bootstrap
+        Compiler: cargo
 
   # API Gateway HTTP API
   HttpApi:

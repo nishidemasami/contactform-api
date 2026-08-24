@@ -30,6 +30,10 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Default: /develop/contactform-api-public/retained/ReviewWebsiteURL
     Description: "SSM Parameter Path for ReviewWebsiteURL"
+  ApiGatewayDomain:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /develop/contactform-api-public/api/ApiGatewayDomain
+    Description: "SSM Parameter Path for ApiGatewayDomain"
 
 Conditions:
   IsRelease: !Equals [!Ref Stage, release]
@@ -45,6 +49,11 @@ Resources:
         HttpVersion: http2and3
         DefaultRootObject: index.html
         Origins:
+          - Id: ApiGatewayOrigin
+            DomainName: !Ref ApiGatewayDomain
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
           - Id: ReviewS3WebsiteOrigin
             DomainName: !Ref ReviewWebsiteURL
             CustomOriginConfig:
@@ -65,6 +74,20 @@ Resources:
             - HEAD
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           Compress: true
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: ApiGatewayOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - PATCH
+              - POST
+              - DELETE
         PriceClass: PriceClass_200
 
 Outputs:
