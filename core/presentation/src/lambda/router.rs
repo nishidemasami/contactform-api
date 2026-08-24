@@ -14,6 +14,8 @@ use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
 /// | `MethodNotAllowed` | 405 Method Not Allowed |
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Route {
+    /// OPTIONS
+    Options,
     /// POST /api/v1/inquiry - 問い合わせ作成
     CreateInquiry,
     /// GET /api/v1/inquiries - 問い合わせ一覧（未実装）
@@ -41,6 +43,7 @@ pub fn route(request: &ApiGatewayV2httpRequest) -> Route {
     let path: &str = request.raw_path.as_str();
 
     match (method, path) {
+        ("OPTIONS", _) => Route::Options,
         ("POST", "/api/v1/inquiry") => Route::CreateInquiry,
         ("GET", "/api/v1/inquiries") => Route::FindInquiries,
         (_, "/api/v1/inquiry") | (_, "/api/v1/inquiries") => Route::MethodNotAllowed,
