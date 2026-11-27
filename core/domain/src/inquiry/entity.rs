@@ -121,5 +121,6 @@ mod kani_proofs {
         assert_eq!(inquiry.email().value().as_bytes(), &[email_byte]);
         assert_eq!(inquiry.message().value().as_bytes(), &[msg_byte]);
         assert_eq!(*inquiry.created_at(), created_at);
+        assert_eq!(inquiry.created_at().offset(), created_at.offset());
     }
 }
