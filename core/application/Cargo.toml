@@ -6,9 +6,9 @@ edition.workspace = true
 [dependencies]
 domain = { path = "../domain" }
 async-trait.workspace = true
-chrono.workspace = true
-thiserror.workspace = true
-uuid.workspace = true
+chrono = { workspace = true, features = ["clock", "serde", "std"] }
+thiserror = { workspace = true, features = ["std"] }
+uuid = { workspace = true, features = ["serde", "std", "v7"] }
 
 [dev-dependencies]
 tokio.workspace = true

@@ -10,10 +10,10 @@ sea_orm_entities = { path = "../../db/sea_orm_entities" }
 anyhow.workspace = true
 async-trait.workspace = true
 aurora-dsql-sqlx-connector.workspace = true
-chrono.workspace = true
+chrono = { workspace = true, features = ["clock", "serde", "std"] }
 serde_json.workspace = true
 tracing.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["serde", "std", "v7"] }
 
 [dev-dependencies]
 tokio.workspace = true
