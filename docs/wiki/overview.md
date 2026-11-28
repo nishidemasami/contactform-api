@@ -1,6 +1,6 @@
 # プロジェクト全体概要
 
-> 最終更新: 2026-08-16 | ソース: raw/20260816_要件.md, raw/00000005_GitHub設定.md, raw/00000003_インフラ規約と実装例.md
+> 最終更新: 2026-11-27 | ソース: raw/20260816_要件.md, raw/00000005_GitHub設定.md, raw/00000003_インフラ規約と実装例.md, raw/00000011_形式手法による検証.md
 
 `contactform-api` は、コンタクトフォーム（<https://nishidemasami.github.io/contact/index.html>）からのPOSTを受け付ける問い合わせAPIである。
 AIによる開発を前提に、モノレポ構成でインフラ・アプリ・ドキュメントを一元管理する。
@@ -34,10 +34,10 @@ AIによる開発を前提に、モノレポ構成でインフラ・アプリ・
         └─▶ /             → S3（フロントエンドSPA）※develop環境のみ
 ```
 
-- **API**: Rust + AWS Lambda（メモリ128MB、シングルスレッド）
+- **API**: Rust + AWS Lambda（メモリ128MB、シングルスレッド、`core/domain` は `#![no_std]` ＋ Verus / Kani 形式検証済）
 - **DB**: Amazon Aurora DSQL（PostgreSQL互換・サーバレス）
 - **インフラ**: AWS SAM（IaC）
-- **CI/CD**: GitHub Actions
+- **CI/CD**: GitHub Actions（フォーマット・Clippy・Verus / Kani 形式検証・単体／結合テスト・自動デプロイ）
 - **フロントエンド**: Next.js + TypeScript + Tailwind CSS（テスト用）
 
 ---

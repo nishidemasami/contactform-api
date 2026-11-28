@@ -10,6 +10,7 @@ core
 │       └── inquiry
 │           ├── entity.rs
 │           ├── repository.rs
+│           ├── validation.rs
 │           ├── value_object.rs
 │           ├── domain_error.rs
 │           └── repository_error.rs
@@ -49,7 +50,7 @@ core
 
 - アーキテクチャ
   - クリーンアーキテクチャとDDDを基本方針とする。
-  - `domain` は他の業務層に依存してはならない。
+  - `domain` は他の業務層に依存してはならず、`#![no_std]`（`alloc` 使用、純粋検証コアは `alloc` 非依存）を維持する。
   - `application` は `domain` にのみ依存する。
   - `infrastructure` は `domain` のリポジトリtraitを実装する。
   - `presentation` はHTTP、Lambda、OpenAPIなど外部入出力を担当する。
@@ -79,6 +80,17 @@ core
 
 - コンパイルチェック
   - `cargo check --workspace --all-targets --all-features` を実行する。
+  - `domain` 変更時は `cargo check -p domain --target x86_64-unknown-none` で `no_std` 整合性を確認する。
+
+- 形式手法検証（`domain` 層）
+  - 既存のワークスペースビルドや `Cargo.toml` 依存グラフへの影響を避けつつ `--no-cheating` で厳格に証明するため、純粋なドメイン検証アルゴリズムは外部クレート・`alloc` 非依存のコアモジュール（例: `inquiry/validation.rs`）に切り出す **Verified Core（Functional Core, Imperative Shell）パターン**を採用する。
+  - 値オブジェクトは検証用コピーを持たず、Verified Core の本番関数を直接呼び出す薄いラッパーとして実装する。
+  - **Verus**（任意長・演繹的検証）:
+    - `#[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(...))]` および `verus_proof_expr!` を用い、通常ビルドでゼロオーバーヘッドかつ `rustfmt` / `clippy` が通る形で記述する。
+    - `verus --crate-type=lib --no-cheating core/domain/src/inquiry/validation.rs` で公理追加（`assume` / `admit` / `external_body`）なしに検証通過させる。
+  - **Kani**（有界モデル検査）:
+    - Verified Core と Rust 標準ライブラリ（`char::is_whitespace` 等）の同値性、および外側の値オブジェクト・エンティティを `cargo kani -p domain --output-format terse -j` で検証する。
+    - CBMC の状態爆発を避けるため、ハーネス内での `core::str::from_utf8`・`str::trim()`・`str::chars().count()`・`chrono::Utc::timestamp_opt`・ループ内の `String::push` を避け、`kani::any::<char>()` と `encode_utf8` 等による軽量なシンボリック入力構築を用いる。
 
 - テスト
   - 通常テストは `cargo test --workspace --all-features` を実行する。

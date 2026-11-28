@@ -24,7 +24,7 @@
 - [cicd.md](./wiki/cicd.md)
   - **概要**: GitHub Actionsワークフロー（API, Frontend, Retained, Wiki Lint等）の設計とCI/CDパイプラインの全体像。
 - [coding-conventions.md](./wiki/coding-conventions.md)
-  - **概要**: Rust言語のコーディング規約、ドメイン駆動設計（DDD）のレイヤー構成、型明記ルールやエラー設計方針。
+  - **概要**: Rust言語のコーディング規約、ドメイン駆動設計（DDD）のレイヤー構成、`domain` 層の `#![no_std]` 化・形式手法検証（Verus / Kani）方針と実践ノウハウ。
 - [database.md](./wiki/database.md)
   - **概要**: Liquibaseを用いたDBマイグレーション規約、Aurora DSQL / PostgreSQL運用、SeaORMエンティティ定義規約。
 - [frontend.md](./wiki/frontend.md)
@@ -36,7 +36,7 @@
 - [infrastructure.md](./wiki/infrastructure.md)
   - **概要**: AWS SAMを用いたインフラ構築、サーバレスアーキテクチャ設計、自動命名ルールとスタック分離方針。
 - [known-issues.md](./wiki/known-issues.md)
-  - **概要**: CloudFormationスタック名長制限など、プロジェクトで把握されている既知の制約事項や注意点。
+  - **概要**: CloudFormationスタック名長制限や形式手法ツールの制約など、プロジェクトで把握されている既知の制約事項や注意点。
 - [llm-wiki.md](./wiki/llm-wiki.md)
   - **概要**: AIエージェントと人間が協調してウィキを維持管理するためのLLM-WIKI運用ルール（スキーマ定義）。
 - [log.md](./wiki/log.md)
@@ -76,6 +76,8 @@
   - **概要**: テスト用の静的SPAサイト（Next.js / TypeScript）の実装規約およびデプロイ方針（develop環境限定）。
 - [00000010_既知の問題.md](./raw/00000010_既知の問題.md)
   - **概要**: AWS CloudFormationのスタック名文字数制限（最大128文字）や命名ルール等、システム構築における既知の制約事項。
+- [00000011_形式手法による検証.md](./raw/00000011_形式手法による検証.md)
+  - **概要**: `domain` 層の `#![no_std]` 化の必然性、形式手法（Verus / Kani）のメリット・デメリット、全プログラムを検証できない／しない理由、実践ノウハウと懸念事項・改善案。
 - [20260816_要件.md](./raw/20260816_要件.md)
   - **概要**: コンタクトフォームからのPOSTを受け付ける問い合わせAPIの要件定義、およびテスト用静的SPAサイトの要件。
 - [BACKLOG.md](./raw/BACKLOG.md)
