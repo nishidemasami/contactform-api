@@ -287,6 +287,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn 重複エラーの場合409を返す() {
+        use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
+        use lambda_runtime::Context;
+
+        let mock: Arc<MockInquiryRepository> = Arc::new(MockInquiryRepository::new());
+        mock.set_error(InquiryRepositoryError::Duplicate);
+        let repository: Arc<dyn InquiryRepository> = mock;
+
+        let request: ApiGatewayV2httpRequest = serde_json::from_value(serde_json::json!({
+            "version": "2.0",
+            "rawPath": "/api/v1/inquiry",
+            "requestContext": {
+                "http": {
+                    "method": "POST",
+                    "path": "/api/v1/inquiry",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "127.0.0.1",
+                    "userAgent": "test"
+                },
+                "accountId": "123456789012",
+                "apiId": "test",
+                "domainName": "test",
+                "domainPrefix": "test",
+                "requestId": "test",
+                "routeKey": "$default",
+                "stage": "$default",
+                "time": "12/Mar/2020:19:03:58 +0000",
+                "timeEpoch": 1583348638390u64
+            },
+            "body": r#"{"name":"山田太郎","email":"yamada@example.com","message":"テストメッセージ"}"#,
+            "isBase64Encoded": false
+        }))
+        .unwrap();
+
+        let event: lambda_runtime::LambdaEvent<ApiGatewayV2httpRequest> =
+            lambda_runtime::LambdaEvent::new(request, Context::default());
+
+        let result: Result<
+            aws_lambda_events::apigw::ApiGatewayV2httpResponse,
+            lambda_runtime::Error,
+        > = handler(repository, event).await;
+        assert!(result.is_ok());
+        let response: aws_lambda_events::apigw::ApiGatewayV2httpResponse = result.unwrap();
+        assert_eq!(response.status_code, 409);
+        assert_eq!(
+            response.body,
+            Some(aws_lambda_events::encodings::Body::Text(
+                r#"{"message":"inquiry already exists"}"#.to_string()
+            ))
+        );
+    }
+
+    #[tokio::test]
     #[ignore = "ローカルPostgreSQLの起動が必要なためデフォルトでは実行しない"]
     async fn 実際にローカルの_postgre_sqlに接続するテスト() {
         use tokio::sync::OnceCell;
