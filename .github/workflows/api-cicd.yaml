@@ -76,6 +76,35 @@ jobs:
       - name: cargo clippy の実行
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Verusによる形式手法検証（domain / presentation）
+        run: |
+          VERUS_VERSION="0.2026.11.22.1ce6a59"
+          ARCH="$(uname -m)"
+          if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            VERUS_ASSET="verus-${VERUS_VERSION}-arm64-linux.zip"
+            VERUS_DIR="verus-arm64-linux"
+            VERUS_TOOLCHAIN="1.100.0-aarch64-unknown-linux-gnu"
+          else
+            VERUS_ASSET="verus-${VERUS_VERSION}-x86-linux.zip"
+            VERUS_DIR="verus-x86-linux"
+            VERUS_TOOLCHAIN="1.100.0-x86_64-unknown-linux-gnu"
+          fi
+          mkdir -p "$HOME/.local/verus"
+          curl -fsSL "https://github.com/verus-lang/verus/releases/download/release/${VERUS_VERSION}/${VERUS_ASSET}" -o /tmp/verus.zip
+          unzip -q -o /tmp/verus.zip -d "$HOME/.local/verus"
+          rm -f /tmp/verus.zip
+          rustup toolchain install "$VERUS_TOOLCHAIN" --profile minimal --no-self-update
+          "$HOME/.local/verus/${VERUS_DIR}/verus" --crate-type=lib --no-cheating core/domain/src/inquiry/validation.rs
+          "$HOME/.local/verus/${VERUS_DIR}/verus" --crate-type=lib --no-cheating core/presentation/src/lambda/http_decision.rs
+
+      - name: Kaniによる形式手法検証（domain / application / presentation）
+        run: |
+          cargo install --locked kani-verifier --version 0.68.0
+          cargo kani setup
+          cargo kani -p domain --output-format terse -j
+          cargo kani -p application --output-format terse -j
+          kani --output-format terse core/presentation/src/lambda/http_decision.rs
+
       - name: Liquibaseでローカルマイグレーション
         run: |
           docker run --rm \
@@ -111,11 +140,7 @@ jobs:
       - name: OpenAPI仕様書の生成と差分確認
         run: |
           cargo build --bin bootstrap --release 2>/dev/null || true
-          if cargo build --bin openapi-export 2>/dev/null; then
-            ./target/release/openapi-export > api/openapi.yaml
-          else
-            echo "openapi-exportバイナリが見つからないためスキップします"
-          fi
+          cargo run -p lambda --bin export_openapi
 
       - name: OpenAPI仕様書の差分がある場合にコミット
         if: >-

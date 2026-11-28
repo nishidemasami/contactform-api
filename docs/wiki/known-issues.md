@@ -1,6 +1,6 @@
 # 既知の問題
 
-> 最終更新: 2026-08-16 | ソース: raw/00000010_既知の問題.md
+> 最終更新: 2026-11-27 | ソース: raw/00000010_既知の問題.md, raw/00000011_形式手法による検証.md
 
 現時点で把握している既知の問題・制約事項をまとめる。
 
@@ -60,7 +60,24 @@ CloudFormation 実行用 IAM ロール（`SAM_DEPLOY_ROLE_ARN`）の IAM ポリ�
 
 ---
 
+## 3. 形式手法検証（Verus / Kani）におけるツールチェーン制約と状態爆発
+
+### 問題
+
+1. **Verus のツールチェーン・`vstd` 制約**
+   - `cargo verus` でクレート全体を検証する場合、`Cargo.toml` への `vstd` 追加と Verus 指定の特定 Rust バージョン（例：`1.100.0`）が必須となるが、既存 CI の Rust バージョン（`1.97.1`）や `no_std`（`x86_64-unknown-none`）・`--all-features` ビルドと衝突する。
+2. **Kani（CBMC）における標準ライブラリ最適化起因の状態爆発**
+   - シンボリック入力に対して `core::str::from_utf8`・`str::trim()`・`str::chars().count()`・`chrono::Utc.timestamp_opt` を呼ぶと、標準ライブラリ内部のチャンク処理・双方向探索・SWAR ビット演算・64ビット除算により SAT ソルバがハングする。
+
+### 対策
+
+- 純粋な検証ロジックは外部クレート・`alloc` 非依存のコアモジュール（`core/domain/src/inquiry/validation.rs`）に分離し、`Cargo.toml` に `vstd` を追加せず `verus --crate-type=lib --no-cheating` で直接検証する。
+- Kani ハーネスでは `kani::any::<char>()` と `encode_utf8`、`NaiveTime::from_num_seconds_from_midnight_opt`、`Uuid::as_u128()` を用いて不要な状態空間爆発を回避する（詳細は [coding-conventions.md](./coding-conventions.md) を参照）。
+
+---
+
 ## 関連ページ
 
+- [coding-conventions.md](./coding-conventions.md) — コーディング規約・形式手法ノウハウ
 - [infrastructure.md](./infrastructure.md) — インフラ規約（SAM・スタック設計）
 - [backlog.md](./backlog.md) — バックログ・未解決問題

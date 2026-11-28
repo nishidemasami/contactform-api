@@ -74,8 +74,17 @@ impl InquiryRepository for SeaOrmInquiryRepository {
         );
 
         self.db.execute_raw(statement).await.map_err(|e| {
-            tracing::error!("問い合わせの保存に失敗しました: {:?}", e);
-            InquiryRepositoryError::Infrastructure
+            let is_unique_violation: bool = matches!(
+                e.sql_err(),
+                Some(sea_orm::SqlErr::UniqueConstraintViolation(_))
+            );
+            if is_unique_violation {
+                tracing::warn!("問い合わせIDが重複しました: {:?}", e);
+                InquiryRepositoryError::Duplicate
+            } else {
+                tracing::error!("問い合わせの保存に失敗しました: {:?}", e);
+                InquiryRepositoryError::Infrastructure
+            }
         })?;
 
         Ok(inquiry)
@@ -84,15 +93,14 @@ impl InquiryRepository for SeaOrmInquiryRepository {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
+    use domain::inquiry::value_object::{InquiryEmail, InquiryId, InquiryMessage, InquiryName};
+
+    use crate::db::{config::DatabaseConfig, connection::create_connection};
+
     use super::*;
 
-    #[tokio::test]
-    #[ignore = "ローカルPostgreSQLの起動が必要なためデフォルトでは実行しない"]
-    async fn ローカルのpostgresqlに問い合わせを保存できる() {
-        use crate::db::{config::DatabaseConfig, connection::create_connection};
-        use chrono::Utc;
-        use domain::inquiry::value_object::{InquiryEmail, InquiryId, InquiryMessage, InquiryName};
-
+    async fn create_test_repository() -> SeaOrmInquiryRepository {
         let db: DatabaseConnection = create_connection(&DatabaseConfig::PostgreSQL {
             host: "localhost".into(),
             port: 5432,
@@ -103,7 +111,13 @@ mod tests {
         .await
         .expect("DB接続に失敗しました");
 
-        let repository: SeaOrmInquiryRepository = SeaOrmInquiryRepository::new(db);
+        SeaOrmInquiryRepository::new(db)
+    }
+
+    #[tokio::test]
+    #[ignore = "ローカルPostgreSQLの起動が必要なためデフォルトでは実行しない"]
+    async fn ローカルのpostgresqlに問い合わせを保存できる() {
+        let repository: SeaOrmInquiryRepository = create_test_repository().await;
 
         let inquiry: Inquiry = Inquiry::new(
             InquiryId::new(Uuid::now_v7()),
@@ -115,5 +129,35 @@ mod tests {
 
         let result: Result<Inquiry, InquiryRepositoryError> = repository.save(inquiry).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    #[ignore = "ローカルPostgreSQLの起動が必要なためデフォルトでは実行しない"]
+    async fn 同一idの問い合わせを2回保存した場合duplicateエラーになる() {
+        let repository: SeaOrmInquiryRepository = create_test_repository().await;
+        let duplicate_id: InquiryId = InquiryId::new(Uuid::now_v7());
+
+        let first_inquiry: Inquiry = Inquiry::new(
+            duplicate_id.clone(),
+            InquiryName::new("山田太郎").unwrap(),
+            InquiryEmail::new("yamada@example.com").unwrap(),
+            InquiryMessage::new("1回目の保存").unwrap(),
+            DateTime::<FixedOffset>::from(Utc::now()),
+        );
+        let second_inquiry: Inquiry = Inquiry::new(
+            duplicate_id,
+            InquiryName::new("佐藤花子").unwrap(),
+            InquiryEmail::new("sato@example.com").unwrap(),
+            InquiryMessage::new("同一IDでの2回目の保存").unwrap(),
+            DateTime::<FixedOffset>::from(Utc::now()),
+        );
+
+        let first_result: Result<Inquiry, InquiryRepositoryError> =
+            repository.save(first_inquiry).await;
+        assert!(first_result.is_ok());
+
+        let second_result: Result<Inquiry, InquiryRepositoryError> =
+            repository.save(second_inquiry).await;
+        assert_eq!(second_result, Err(InquiryRepositoryError::Duplicate));
     }
 }

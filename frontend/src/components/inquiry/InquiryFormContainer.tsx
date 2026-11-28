@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Toast } from "@/components/common/Toast";
 import { submitInquiry } from "@/lib/inquiryApi";
+import { canSubmitInquiry } from "@/lib/inquiryValidation";
 import { InquiryFormView } from "./InquiryFormView";
 import { TermsDialog } from "./TermsDialog";
 
@@ -22,6 +23,10 @@ export function InquiryFormContainer() {
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const onSubmit = async (): Promise<void> => {
+    if (!canSubmitInquiry({ name, email, message }, acceptedTerms, isSubmitting)) {
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await submitInquiry({ name, email, message });

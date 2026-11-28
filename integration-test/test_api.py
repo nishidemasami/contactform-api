@@ -31,6 +31,19 @@ def test_create_inquiry_validation_error():
     url = f"{BASE_URL}/api/v1/inquiry"
     payload = {
         "name": "",
+        "email": "integration-test@example.com",
+        "message": "エラーテスト",
+    }
+    headers = {"Content-Type": "application/json"}
+    response = requests.post(url, json=payload, headers=headers)
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.text}"
+
+
+def test_create_inquiry_invalid_email():
+    """2b. 異常系: POST /api/v1/inquiry (入力エラー - メールアドレス形式不正)"""
+    url = f"{BASE_URL}/api/v1/inquiry"
+    payload = {
+        "name": "結合テスト太郎",
         "email": "invalid-email",
         "message": "エラーテスト",
     }

@@ -58,10 +58,12 @@ SeaORMの `ActiveModel::insert` は `RETURNING` 句（暗黙的なSELECT）を�
 - `ConnectionTrait::execute_raw`（プレースホルダー使用必須）
 - `exec_without_returning`
 
-### 3.2. SQLインジェクション対策
+### 3.2. SQLインジェクション対策・エラー分類
 
 - プレースホルダー（`$1`, `$2`等）を必ず使用する
 - 文字列結合によるSQL組み立ては厳禁
+- 一意制約違反（`SqlErr::UniqueConstraintViolation`）は `InquiryRepositoryError::Duplicate`、その他のDB障害は `InquiryRepositoryError::Infrastructure` へ変換する
+- PostgreSQL / Aurora DSQL の `TEXT` 列でエラーとなる NUL 文字（`U+0000`）はドメイン層のバリデーションで事前に完全拒否する
 
 ---
 
@@ -72,13 +74,14 @@ db/
 ├── liquibase/
 │   ├── changelog.xml         Liquibaseチェンジログ
 │   └── changes/
-│       ├── 0001_create_inquiries_table.sql
-│       ├── 0002_add_comment_to_id.sql
-│       └── ...
+│       ├── 0001_create_insertonly_role_local.sql
+│       ├── 0004_create_inquiries_table.sql
+│       └── ...（0014_grant_insert_inquiries_to_insertonly.sql まで1文1ファイル）
 ├── sea_orm_entities/         SeaORMエンティティ定義
 │   ├── Cargo.toml
 │   └── src/
-│       └── inquiries.rs
+│       └── entity/
+│           └── inquiries.rs
 └── template.yaml             SAMテンプレート（IAMロール・DSQLクラスター等）
 ```
 

@@ -2,8 +2,6 @@ openapi: 3.1.0
 info:
   title: contactform-api
   description: コンタクトフォームAPI
-  license:
-    name: ''
   version: 0.1.0
 paths:
   /api/v1/inquiries:
@@ -63,13 +61,13 @@ components:
       description: |-
         問い合わせ作成リクエスト
 
-        ## フィールド
+        ## フィールドと正規化・検証仕様
 
-        | フィールド | 型 | 説明 |
-        |---|---|---|
-        | `name` | `String` | 氏名 |
-        | `email` | `String` | 連絡先メールアドレス |
-        | `message` | `String` | 問い合わせ本文 |
+        | フィールド | 型 | 生JSONスキーマ制約 | ドメイン正規化・検証ルール |
+        |---|---|---|---|
+        | `name` | `String` | `1..=100`文字 | 正規化なし（`trim`前 `1..=100`文字・空白のみ不可・制御文字不可） |
+        | `email` | `String` | `6`文字以上（前後空白許容） | 前後のUnicode空白を `trim` 正規化後、`6..=254`文字かつRFC 5321/5322/1123準拠メール形式 |
+        | `message` | `String` | `1..=5000`文字 | 正規化なし（`trim`前 `1..=5000`文字・空白のみ不可・改行タブ以外の制御文字不可） |
       required:
       - name
       - email
@@ -77,13 +75,18 @@ components:
       properties:
         email:
           type: string
-          description: 連絡先メールアドレス
+          description: 連絡先メールアドレス（生入力は前後のUnicode空白を許容。サーバー側で前後 `trim` 正規化後に 6〜254文字・RFC準拠メール形式を検証）
+          minLength: 6
         message:
           type: string
-          description: 問い合わせ本文
+          description: 問い合わせ本文（`trim`前 1〜5000文字、空白のみ不可・改行タブ以外の制御文字不可）
+          maxLength: 5000
+          minLength: 1
         name:
           type: string
-          description: 氏名
+          description: 氏名（`trim`前 1〜100文字、空白のみ不可・制御文字不可）
+          maxLength: 100
+          minLength: 1
     CreateInquiryResponse:
       type: object
       description: 問い合わせ作成レスポンス

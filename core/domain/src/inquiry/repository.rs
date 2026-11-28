@@ -3,6 +3,8 @@
 //! 問い合わせの永続化処理を定義するトレイト。
 //! infrastructure層でSeaORMを使用して実装する。
 
+use alloc::boxed::Box;
+
 use async_trait::async_trait;
 
 use super::{entity::Inquiry, repository_error::InquiryRepositoryError};

@@ -14,3 +14,6 @@ pub mod domain_error;
 
 /// リポジトリエラー
 pub mod repository_error;
+
+/// テキストバリデーションコア（`no_std` / Verus・Kani 形式検証対象）
+pub mod validation;
