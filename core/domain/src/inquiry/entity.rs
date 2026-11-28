@@ -82,7 +82,7 @@ mod kani_proofs {
     /// 証明: 任意の有効な入力（任意の UUID・任意の非空白 ASCII 文字・任意の時刻とオフセット）から
     /// 生成された `Inquiry` エンティティが全フィールドを欠損なく保持すること
     #[kani::proof]
-    #[kani::unwind(4)]
+    #[kani::unwind(8)]
     fn proof_inquiry_entity_preserves_all_fields() {
         let uuid_bytes: [u8; 16] = kani::any();
         let expected_uuid: Uuid = Uuid::from_bytes(uuid_bytes);
@@ -92,9 +92,12 @@ mod kani_proofs {
         kani::assume(name_byte.is_ascii_graphic());
         let name: InquiryName = InquiryName::new(String::from(name_byte as char)).unwrap();
 
-        let email_byte: u8 = kani::any();
-        kani::assume(email_byte.is_ascii_graphic());
-        let email: InquiryEmail = InquiryEmail::new(String::from(email_byte as char)).unwrap();
+        let email_local: u8 = kani::any();
+        kani::assume((b'a'..=b'z').contains(&email_local) || (b'0'..=b'9').contains(&email_local));
+        let email_buf: [u8; 6] = [email_local, b'@', b'b', b'.', b'c', b'o'];
+        // SAFETY: ASCII 英数字 + `"@b.co"` は常に正当な UTF-8。
+        let email_str: &str = unsafe { core::str::from_utf8_unchecked(&email_buf) };
+        let email: InquiryEmail = InquiryEmail::new(String::from(email_str)).unwrap();
 
         let msg_byte: u8 = kani::any();
         kani::assume(msg_byte.is_ascii_graphic());
@@ -118,7 +121,7 @@ mod kani_proofs {
 
         assert_eq!(inquiry.id().value().as_u128(), expected_uuid.as_u128());
         assert_eq!(inquiry.name().value().as_bytes(), &[name_byte]);
-        assert_eq!(inquiry.email().value().as_bytes(), &[email_byte]);
+        assert_eq!(inquiry.email().value().as_bytes(), &email_buf);
         assert_eq!(inquiry.message().value().as_bytes(), &[msg_byte]);
         assert_eq!(*inquiry.created_at(), created_at);
         assert_eq!(inquiry.created_at().offset(), created_at.offset());

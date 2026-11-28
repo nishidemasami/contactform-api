@@ -28,18 +28,25 @@
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+/// JSONリクエストボディの最大許容バイト数（64 KiB）
+///
+/// ドメイン上限（氏名100文字 + メール254文字 + 本文5,000文字 = 最大約21KB UTF-8 + JSONエスケープ）に
+/// 対して十分な余裕を持ちつつ、128MB Lambdaでの過大ペイロード解析によるメモリ圧迫を防ぐ。
+#[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec)]
+pub const MAX_REQUEST_BODY_BYTES: usize = 65_536;
+
 /// ルート定義
 ///
 /// | バリアント | 説明 |
 /// |---|---|
-/// | `Options` | `OPTIONS *`（CORSプリフライト） |
+/// | `Options` | 既知APIパスに対する `OPTIONS`（CORSプリフライト・204 No Content） |
 /// | `CreateInquiry` | `POST /api/v1/inquiry` |
 /// | `FindInquiries` | `GET /api/v1/inquiries` |
-/// | `NotFound` | 404 Not Found |
-/// | `MethodNotAllowed` | 405 Method Not Allowed |
+/// | `NotFound` | 未定義パス（404 Not Found） |
+/// | `MethodNotAllowed` | 既知APIパスに対する未許可メソッド（405 Method Not Allowed） |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
-    /// OPTIONS（CORSプリフライト）
+    /// OPTIONS（既知パスへのCORSプリフライト・204 No Content）
     Options,
     /// POST /api/v1/inquiry - 問い合わせ作成
     CreateInquiry,
@@ -143,10 +150,15 @@ pub open spec fn inquiries_path_spec() -> Seq<u8> {
     ]
 }
 
+/// 既知のAPIパスであるかの仕様
+pub open spec fn is_known_api_path_spec(path: Seq<u8>) -> bool {
+    path == inquiry_path_spec() || path == inquiries_path_spec()
+}
+
 /// 許可されたHTTPステータスコード集合の仕様
 pub open spec fn is_allowed_http_status_spec(status: i64) -> bool {
-    status == 200
-        || status == 201
+    status == 201
+        || status == 204
         || status == 400
         || status == 404
         || status == 405
@@ -370,20 +382,22 @@ pub fn is_inquiries_path(path: &[u8]) -> bool {
 
 /// HTTPメソッドとパスのバイト列からルートを決定する
 ///
-/// ## 優先順位と不変条件
+/// ## 優先順位と不変条件（RFC 9110 準拠）
 ///
-/// 1. `OPTIONS` はパスによらず常に `Route::Options`（CORSプリフライト最優先）
-/// 2. `POST /api/v1/inquiry` のみ `Route::CreateInquiry`
-/// 3. `GET /api/v1/inquiries` のみ `Route::FindInquiries`
-/// 4. 既知パスに対する上記以外のメソッドは `Route::MethodNotAllowed`（405）
-/// 5. それ以外はすべて `Route::NotFound`（404）
+/// 1. 未定義パス（`/api/v1/inquiry`・`/api/v1/inquiries` 以外）はメソッドによらず常に `Route::NotFound`（404）
+/// 2. 既知APIパスに対する `OPTIONS` は常に `Route::Options`（204 No Content）
+/// 3. `POST /api/v1/inquiry` のみ `Route::CreateInquiry`
+/// 4. `GET /api/v1/inquiries` のみ `Route::FindInquiries`（501）
+/// 5. 既知APIパスに対する上記以外のメソッドは `Route::MethodNotAllowed`（405）
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
-        res == Route::Options <==> (method@ == options_method_spec()),
+        res == Route::NotFound <==> !is_known_api_path_spec(path@),
+        res == Route::Options
+            <==> (is_known_api_path_spec(path@) && method@ == options_method_spec()),
         res == Route::CreateInquiry
-            <==> (method@ == post_method_spec() && path@ == inquiry_path_spec()),
+            <==> (path@ == inquiry_path_spec() && method@ == post_method_spec()),
         res == Route::FindInquiries
-            <==> (method@ == get_method_spec() && path@ == inquiries_path_spec()),
+            <==> (path@ == inquiries_path_spec() && method@ == get_method_spec()),
         res == Route::MethodNotAllowed <==> (
             method@ != options_method_spec()
                 && (
@@ -391,19 +405,13 @@ pub fn is_inquiries_path(path: &[u8]) -> bool {
                         || (path@ == inquiries_path_spec() && method@ != get_method_spec())
                 )
         ),
-        res == Route::NotFound <==> (
-            method@ != options_method_spec()
-                && path@ != inquiry_path_spec()
-                && path@ != inquiries_path_spec()
-        ),
 ))]
 pub fn route_bytes(method: &[u8], path: &[u8]) -> Route {
-    if is_options_method(method) {
-        return Route::Options;
-    }
-
     let on_inquiry: bool = is_inquiry_path(path);
     if on_inquiry {
+        if is_options_method(method) {
+            return Route::Options;
+        }
         if is_post_method(method) {
             return Route::CreateInquiry;
         }
@@ -412,6 +420,9 @@ pub fn route_bytes(method: &[u8], path: &[u8]) -> Route {
 
     let on_inquiries: bool = is_inquiries_path(path);
     if on_inquiries {
+        if is_options_method(method) {
+            return Route::Options;
+        }
         if is_get_method(method) {
             return Route::FindInquiries;
         }
@@ -430,7 +441,7 @@ pub fn route_method_and_path(method: &str, path: &str) -> Route {
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
         route == Route::CreateInquiry <==> res.is_none(),
-        route == Route::Options <==> (res == Some(200i64)),
+        route == Route::Options <==> (res == Some(204i64)),
         route == Route::FindInquiries <==> (res == Some(501i64)),
         route == Route::NotFound <==> (res == Some(404i64)),
         route == Route::MethodNotAllowed <==> (res == Some(405i64)),
@@ -442,11 +453,23 @@ pub fn route_method_and_path(method: &str, path: &str) -> Route {
 pub const fn static_route_status_code(route: Route) -> Option<i64> {
     match route {
         Route::CreateInquiry => None,
-        Route::Options => Some(200),
+        Route::Options => Some(204),
         Route::FindInquiries => Some(501),
         Route::NotFound => Some(404),
         Route::MethodNotAllowed => Some(405),
     }
+}
+
+/// JSONデシリアライズ前にリクエストボディを受け入れ可能か判定する
+///
+/// - Base64エンコードされたバイナリボディは不可
+/// - 64 KiB（`MAX_REQUEST_BODY_BYTES`）を超える過大ペイロードは不可
+#[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
+    ensures
+        res <==> (!is_base64_encoded && byte_len <= MAX_REQUEST_BODY_BYTES),
+))]
+pub const fn is_request_body_acceptable(byte_len: usize, is_base64_encoded: bool) -> bool {
+    !is_base64_encoded && byte_len <= MAX_REQUEST_BODY_BYTES
 }
 
 /// リポジトリ失敗種別をユースケースエラー分類へ正規化する
@@ -501,6 +524,14 @@ pub proof fn lemma_inquiry_paths_distinct()
 {
     assert(inquiry_path_spec().len() == 15);
     assert(inquiries_path_spec().len() == 17);
+}
+
+/// 補題: 64 KiB のリクエストボディ上限は、有効な全フィールド（氏名100文字 + メール254文字 + 本文5,000文字）の
+/// 最大 UTF-8 バイト長（4バイト/文字換算）に対して3倍以上の余裕を持つ
+pub proof fn lemma_body_limit_accommodates_valid_utf8_fields()
+    ensures
+        4 * (100 + 254 + 5000) < MAX_REQUEST_BODY_BYTES,
+{
 }
 
 /// 補題: 秘匿すべきリポジトリ内部エラー（`NotFound`, `Infrastructure`, `CorruptedData`）は
@@ -571,7 +602,7 @@ mod kani_proofs {
 
         let actual: Route = route_method_and_path(method, path);
         let expected: Route = match (method, path) {
-            ("OPTIONS", _) => Route::Options,
+            ("OPTIONS", "/api/v1/inquiry") | ("OPTIONS", "/api/v1/inquiries") => Route::Options,
             ("POST", "/api/v1/inquiry") => Route::CreateInquiry,
             ("GET", "/api/v1/inquiries") => Route::FindInquiries,
             (_, "/api/v1/inquiry") | (_, "/api/v1/inquiries") => Route::MethodNotAllowed,
@@ -581,17 +612,33 @@ mod kani_proofs {
         assert_eq!(actual, expected);
     }
 
-    /// 証明: 任意の生バイトパス（最大 20 バイト）に対して `"OPTIONS"` メソッドは
-    /// 常に `Route::Options`（HTTP 200）にルーティングされること
+    /// 証明: 既知パスへの `OPTIONS` は常に `Route::Options`（204 No Content）となり、
+    /// 未定義長のパスへの `OPTIONS` は `Route::NotFound`（404）となること
     #[kani::proof]
-    fn proof_options_preflight_always_wins_on_arbitrary_path() {
-        let path_buf: [u8; 20] = kani::any();
+    #[kani::unwind(20)]
+    fn proof_options_routing_and_body_precheck() {
+        assert_eq!(route_bytes(b"OPTIONS", b"/api/v1/inquiry"), Route::Options);
+        assert_eq!(
+            route_bytes(b"OPTIONS", b"/api/v1/inquiries"),
+            Route::Options
+        );
+        assert_eq!(static_route_status_code(Route::Options), Some(204));
+
+        let path_buf: [u8; 14] = kani::any();
         let path_len: usize = kani::any();
         kani::assume(path_len <= path_buf.len());
+        // 14バイト以下は 15バイトの `/api/v1/inquiry` にも 17バイトの `/api/v1/inquiries` にも一致しない
+        assert_eq!(
+            route_bytes(b"OPTIONS", &path_buf[..path_len]),
+            Route::NotFound
+        );
 
-        let routed: Route = route_bytes(b"OPTIONS", &path_buf[..path_len]);
-        assert_eq!(routed, Route::Options);
-        assert_eq!(static_route_status_code(routed), Some(200));
+        let body_len: usize = kani::any();
+        let is_b64: bool = kani::any();
+        assert_eq!(
+            is_request_body_acceptable(body_len, is_b64),
+            !is_b64 && body_len <= MAX_REQUEST_BODY_BYTES
+        );
     }
 
     /// 証明: インフラ・データ破損・未検出エラーはすべて同一の `500 internal server error` に
@@ -630,12 +677,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn optionsメソッドは任意のパスでoptionsルートかつ200になる() {
+    fn optionsメソッドは既知パスで204かつ未知パスで404になる() {
         let r1: Route = route_method_and_path("OPTIONS", "/api/v1/inquiry");
-        let r2: Route = route_method_and_path("OPTIONS", "/unknown/path");
+        let r2: Route = route_method_and_path("OPTIONS", "/api/v1/inquiries");
+        let r3: Route = route_method_and_path("OPTIONS", "/unknown/path");
         assert_eq!(r1, Route::Options);
         assert_eq!(r2, Route::Options);
-        assert_eq!(static_route_status_code(r1), Some(200));
+        assert_eq!(r3, Route::NotFound);
+        assert_eq!(static_route_status_code(r1), Some(204));
+        assert_eq!(static_route_status_code(r3), Some(404));
     }
 
     #[test]

@@ -33,6 +33,8 @@ export function InquiryFormView({
           <input
             className="rounded border px-3 py-2"
             type="text"
+            required
+            maxLength={100}
             value={name}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => onNameChange(event.target.value)}
           />
@@ -43,6 +45,8 @@ export function InquiryFormView({
           <input
             className="rounded border px-3 py-2"
             type="email"
+            required
+            maxLength={254}
             value={email}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => onEmailChange(event.target.value)}
           />
@@ -52,6 +56,8 @@ export function InquiryFormView({
           <span className="text-sm font-medium">本文</span>
           <textarea
             className="min-h-36 rounded border px-3 py-2"
+            required
+            maxLength={5000}
             value={message}
             onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => onMessageChange(event.target.value)}
           />

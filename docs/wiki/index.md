@@ -19,17 +19,17 @@
 | ページ | 概要 | 最終更新 |
 |---|---|---|
 | [overview.md](./overview.md) | プロジェクト全体概要・アーキテクチャ | 2026-11-27 |
-| [requirements.md](./requirements.md) | 要件定義 | 2026-08-16 |
+| [requirements.md](./requirements.md) | 要件定義 | 2026-11-27 |
 
 ## 開発規約
 
 | ページ | 概要 | 最終更新 |
 |---|---|---|
 | [coding-conventions.md](./coding-conventions.md) | コーディング規約（Rust・クリーンアーキテクチャ・DDD・`no_std`・形式手法検証）| 2026-11-27 |
-| [api.md](./api.md) | API規約（Lambda最適化・DBアクセス制限）| 2026-08-16 |
+| [api.md](./api.md) | API規約（Lambda最適化・DBアクセス制限・バリデーション仕様）| 2026-11-27 |
 | [infrastructure.md](./infrastructure.md) | インフラ規約（AWS SAM・サーバレス構成）| 2026-08-16 |
-| [database.md](./database.md) | DB規約（Liquibase・Aurora DSQL・SeaORM）| 2026-08-16 |
-| [frontend.md](./frontend.md) | フロントエンド規約（Next.js・TypeScript）| 2026-08-16 |
+| [database.md](./database.md) | DB規約（Liquibase・Aurora DSQL・SeaORM）| 2026-11-27 |
+| [frontend.md](./frontend.md) | フロントエンド規約（Next.js・TypeScript）| 2026-11-27 |
 | [cicd.md](./cicd.md) | CI/CD規約（GitHub Actions・形式手法CI検証）| 2026-11-27 |
 | [review-process.md](./review-process.md) | レビュープロセス・PR運用規約 | 2026-08-16 |
 

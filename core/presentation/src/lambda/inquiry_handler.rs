@@ -24,7 +24,8 @@ use crate::{
     lambda::{
         http_decision::{
             PublicErrorMessage, RepositoryFailureKind, UsecaseErrorCategory,
-            classify_repository_failure, decide_public_error, static_route_status_code,
+            classify_repository_failure, decide_public_error, is_request_body_acceptable,
+            static_route_status_code,
         },
         router::{Route, route},
     },
@@ -57,10 +58,11 @@ const fn classify_create_inquiry_error(error: &CreateInquiryError) -> UsecaseErr
 /// ```text
 /// `ApiGatewayV2httpRequest`
 ///   └─▶ ルーティング
-///         ├─▶ `POST /api/v1/inquiry` → `create_inquiry`
+///         ├─▶ `OPTIONS /api/v1/inquiry` | `OPTIONS /api/v1/inquiries` → 204 (Empty Body)
+///         ├─▶ `POST /api/v1/inquiry` → `create_inquiry` (201 / 400 / 409 / 500)
 ///         ├─▶ `GET /api/v1/inquiries` → 501
-///         ├─▶ 404 → 404
-///         └─▶ 405 → 405
+///         ├─▶ 未定義パス → 404
+///         └─▶ 未許可メソッド → 405
 /// ```
 pub async fn handler(
     repository: Arc<dyn InquiryRepository>,
@@ -73,8 +75,8 @@ pub async fn handler(
         Route::CreateInquiry => create_inquiry(repository, request).await,
 
         Route::Options => {
-            let status: i64 = static_route_status_code(matched_route).unwrap_or(200);
-            json_response(status, &"{}")
+            let status: i64 = static_route_status_code(matched_route).unwrap_or(204);
+            Ok(empty_response(status))
         }
 
         Route::FindInquiries => {
@@ -114,7 +116,22 @@ async fn create_inquiry(
     repository: Arc<dyn InquiryRepository>,
     request: ApiGatewayV2httpRequest,
 ) -> Result<ApiGatewayV2httpResponse, Error> {
+    let is_base64_encoded: bool = request.is_base64_encoded;
     let body: String = request.body.unwrap_or_default();
+
+    if !is_request_body_acceptable(body.len(), is_base64_encoded) {
+        tracing::warn!(
+            "リクエストボディが許容条件外です (len={}, base64={})",
+            body.len(),
+            is_base64_encoded
+        );
+        return json_response(
+            400,
+            &ErrorResponse {
+                message: "invalid request body".into(),
+            },
+        );
+    }
 
     let req: CreateInquiryRequest = match serde_json::from_str(&body) {
         Ok(r) => r,
@@ -166,6 +183,14 @@ async fn create_inquiry(
             )
         }
     }
+}
+
+/// ボディなしのレスポンス（204 No Content 等）を生成する
+fn empty_response(status_code: i64) -> ApiGatewayV2httpResponse {
+    let mut response: ApiGatewayV2httpResponse = ApiGatewayV2httpResponse::default();
+    response.status_code = status_code;
+    response.body = Some(Body::Empty);
+    response
 }
 
 /// JSONレスポンスを生成する

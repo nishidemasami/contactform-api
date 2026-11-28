@@ -1,6 +1,6 @@
 # API規約
 
-> 最終更新: 2026-08-16 | ソース: raw/00000002_API規約と実装例.md
+> 最終更新: 2026-11-27 | ソース: raw/00000002_API規約と実装例.md, raw/00000001_コーディング規約と実装例.md
 
 バックエンドAPI（AWS Lambda）の設計および実装に関する規約。
 
@@ -35,11 +35,9 @@ async fn main() -> Result<(), Error> { ... }
 
 ### 2.3. OnceCell による静的ライフサイクル管理
 
-Cold Start時に生成した環境変数・DB接続プールを複数リクエスト（Hot Start）にわたって再利用する。
+Cold Start時に生成したDB接続プールを複数リクエスト（Hot Start）にわたって再利用する。
 
 ```rust
-static DSQL_ENDPOINT: OnceCell<String> = OnceCell::const_new();
-static AWS_REGION: OnceCell<String> = OnceCell::const_new();
 static DATABASE_CONNECTION: OnceCell<DatabaseConnection> = OnceCell::const_new();
 ```
 
@@ -59,6 +57,7 @@ static DATABASE_CONNECTION: OnceCell<DatabaseConnection> = OnceCell::const_new()
 - SeaORMの `ActiveModel::insert` は `RETURNING` 句（暗黙的なSELECT）を含むため使用禁止
 - 代わりに `ConnectionTrait::execute_raw` または `exec_without_returning` を使用
 - SQLインジェクション対策: プレースホルダー（`$1`, `$2`等）を必ず使用。文字列結合によるSQL組み立て厳禁
+- 一意制約違反（`UniqueConstraintViolation`）は `InquiryRepositoryError::Duplicate`（HTTP 409）へ変換し、それ以外の内部DBエラーは外部レスポンスへ詳細を漏洩せず HTTP 500 `"internal server error"` に統一する
 
 ---
 
@@ -79,10 +78,10 @@ main()
 
 ## 6. 環境変数
 
-| 変数名 | 必須 | 説明 |
+| 変数名 | 区分 | 説明 |
 |---|---|---|
-| `DSQL_ENDPOINT` | ✓ | Aurora DSQLクラスターのエンドポイント |
-| `AWS_REGION` | ✓ | Aurora DSQLクラスターのAWSリージョン |
+| `DSQL_ENDPOINT` | 必須（SAMテンプレートで注入） | Aurora DSQLクラスターのエンドポイント |
+| `AWS_REGION` | 必須（Lambdaランタイム定義済み変数） | Aurora DSQLクラスターのAWSリージョン |
 
 ---
 
@@ -90,19 +89,41 @@ main()
 
 ### POST /api/v1/inquiry
 
+**リクエスト制約**:
+- Base64エンコードされていない UTF-8 JSON であること
+- リクエストボディ上限: **64 KiB（65,536 bytes）**
+
 **リクエスト（JSON）**:
 ```json
 {
-  "name": "氏名",
-  "email": "メールアドレス",
-  "message": "本文"
+  "name": "山田 太郎",
+  "email": "yamada@example.com",
+  "message": "お問い合わせ本文"
 }
 ```
 
+**フィールドバリデーション規則**:
+
+| フィールド | 前後空白 | 文字数上限の検証対象 | 最大文字数 | 構文・禁止文字ルール |
+|---|---|---|---|---|
+| `name` | 保持 | **`trim`前の文字列** | `100` 文字 | 空・空白のみ不可、C0/C1制御文字（`\0`, `\r`, `\n`, `\t` 等）禁止 |
+| `email` | `trim` 正規化して保持 | **`trim`後の文字列** | `254` 文字 | 空不可、RFC 5321/5322 `dot-atom`（`local` 1..=64文字）+ RFC 1123 ドメイン（`domain` 4..=253文字、2ラベル以上、各ラベル 1..=63文字、TLD 2文字以上かつ英字含有） |
+| `message` | 保持 | **`trim`前の文字列** | `5000` 文字 | 空・空白のみ不可、`\t`・`\n`・`\r` 以外のC0/C1制御文字（NUL `\0` 等）禁止 |
+
 **レスポンス**:
-- 成功: HTTP 200
-- バリデーションエラー: HTTP 400
-- サーバーエラー: HTTP 500
+- 作成成功: **HTTP 201 Created**（`{"id": "<UUID v7>"}`）
+- バリデーション／JSON不正／ボディ過大エラー: **HTTP 400 Bad Request**
+- ID重複エラー: **HTTP 409 Conflict**
+- サーバー内部エラー: **HTTP 500 Internal Server Error**
+
+### その他のルーティング仕様
+
+| メソッド・パス | ステータス | 説明 |
+|---|---|---|
+| `OPTIONS /api/v1/inquiry`, `OPTIONS /api/v1/inquiries` | **HTTP 204 No Content** | CORSプリフライト応答（空ボディ） |
+| `GET /api/v1/inquiries` | **HTTP 501 Not Implemented** | 問い合わせ一覧（未実装スタブ） |
+| 既知パスに対する上記以外のメソッド | **HTTP 405 Method Not Allowed** | 未許可メソッド |
+| 未定義パス（全メソッド） | **HTTP 404 Not Found** | 存在しないエンドポイント |
 
 ---
 

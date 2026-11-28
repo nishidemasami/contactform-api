@@ -158,16 +158,18 @@ mod kani_proofs {
         DateTime::<FixedOffset>::from_naive_utc_and_offset(naive, offset)
     }
 
-    /// 証明: いずれかの入力項目がドメインルールに違反する場合、
+    /// 証明: いずれかの入力項目がドメインルールに違反する場合（空文字・メール構文不正・制御文字混入を含む）、
     /// `repository.save` は一度も呼ばれず（不正データの永続化防止）、
     /// `name` → `email` → `message` の優先順位でドメインエラーが返ること
     #[kani::proof]
-    #[kani::unwind(6)]
+    #[kani::unwind(10)]
     fn proof_usecase_never_calls_repository_on_invalid_input() {
         let name_valid: bool = kani::any();
         let email_valid: bool = kani::any();
         let message_valid: bool = kani::any();
         kani::assume(!(name_valid && email_valid && message_valid));
+
+        let use_syntax_invalid_email: bool = kani::any();
 
         let input: CreateInquiryInput = CreateInquiryInput {
             name: if name_valid {
@@ -176,7 +178,9 @@ mod kani_proofs {
                 String::new()
             },
             email: if email_valid {
-                String::from("b")
+                String::from("a@b.co")
+            } else if use_syntax_invalid_email {
+                String::from("bad")
             } else {
                 String::new()
             },
@@ -204,10 +208,12 @@ mod kani_proofs {
                 Err(CreateInquiryError::Domain(InquiryDomainError::EmptyName))
             );
         } else if !email_valid {
-            assert_eq!(
-                result,
-                Err(CreateInquiryError::Domain(InquiryDomainError::EmptyEmail))
-            );
+            let expected_email_err: InquiryDomainError = if use_syntax_invalid_email {
+                InquiryDomainError::InvalidEmail
+            } else {
+                InquiryDomainError::EmptyEmail
+            };
+            assert_eq!(result, Err(CreateInquiryError::Domain(expected_email_err)));
         } else {
             assert_eq!(
                 result,
@@ -219,14 +225,14 @@ mod kani_proofs {
     /// 証明: 入力が妥当な場合、`repository.save` がちょうど1回だけ呼ばれ、
     /// 渡されたIDが検証されたうえで保存結果エンティティのIDが `CreateInquiryOutput` に返ること
     #[kani::proof]
-    #[kani::unwind(6)]
+    #[kani::unwind(10)]
     fn proof_usecase_saves_once_and_returns_saved_id() {
         let raw_id: Uuid = Uuid::from_bytes(kani::any());
         let created_at: DateTime<FixedOffset> = sample_created_at(32_400);
 
         let input: CreateInquiryInput = CreateInquiryInput {
             name: String::from("a"),
-            email: String::from("b"),
+            email: String::from("a@b.co"),
             message: String::from("c"),
         };
 
@@ -246,7 +252,7 @@ mod kani_proofs {
     /// 証明: リポジトリ層の全4種類のエラーバリアントが欠損・変質なく
     /// `CreateInquiryError::Repository` として伝播すること
     #[kani::proof]
-    #[kani::unwind(6)]
+    #[kani::unwind(10)]
     fn proof_usecase_propagates_all_repository_errors() {
         let selector: u8 = kani::any();
         kani::assume(selector < 4);
@@ -259,7 +265,7 @@ mod kani_proofs {
 
         let input: CreateInquiryInput = CreateInquiryInput {
             name: String::from("a"),
-            email: String::from("b"),
+            email: String::from("a@b.co"),
             message: String::from("c"),
         };
 
@@ -285,7 +291,9 @@ mod tests {
     use std::sync::Mutex;
 
     use async_trait::async_trait;
-    use domain::inquiry::{entity::Inquiry, repository_error::InquiryRepositoryError};
+    use domain::inquiry::{
+        domain_error::InquiryDomainError, entity::Inquiry, repository_error::InquiryRepositoryError,
+    };
 
     use super::*;
 
@@ -345,6 +353,24 @@ mod tests {
 
         let result: Result<CreateInquiryOutput, CreateInquiryError> = usecase.execute(input).await;
         assert!(matches!(result, Err(CreateInquiryError::Domain(_))));
+    }
+
+    #[tokio::test]
+    async fn メールアドレス形式が不正な場合ドメインエラーになる() {
+        let repository: Arc<dyn InquiryRepository> = Arc::new(MockInquiryRepository::new());
+        let usecase: CreateInquiryUsecase = CreateInquiryUsecase::new(repository);
+
+        let input: CreateInquiryInput = CreateInquiryInput {
+            name: "山田太郎".to_string(),
+            email: "invalid-email".to_string(),
+            message: "お問い合わせです".to_string(),
+        };
+
+        let result: Result<CreateInquiryOutput, CreateInquiryError> = usecase.execute(input).await;
+        assert_eq!(
+            result,
+            Err(CreateInquiryError::Domain(InquiryDomainError::InvalidEmail))
+        );
     }
 
     #[tokio::test]

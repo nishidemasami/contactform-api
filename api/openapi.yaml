@@ -2,8 +2,6 @@ openapi: 3.1.0
 info:
   title: contactform-api
   description: コンタクトフォームAPI
-  license:
-    name: ''
   version: 0.1.0
 paths:
   /api/v1/inquiries:
@@ -65,11 +63,11 @@ components:
 
         ## フィールド
 
-        | フィールド | 型 | 説明 |
-        |---|---|---|
-        | `name` | `String` | 氏名 |
-        | `email` | `String` | 連絡先メールアドレス |
-        | `message` | `String` | 問い合わせ本文 |
+        | フィールド | 型 | 文字数制限 | 説明 |
+        |---|---|---|---|
+        | `name` | `String` | `trim`前 1〜100文字 | 氏名（空白のみ不可・制御文字不可） |
+        | `email` | `String` | `trim`後 6〜254文字 | 連絡先メールアドレス（RFC準拠形式） |
+        | `message` | `String` | `trim`前 1〜5000文字 | 問い合わせ本文（空白のみ不可・改行タブ以外の制御文字不可） |
       required:
       - name
       - email
@@ -77,13 +75,20 @@ components:
       properties:
         email:
           type: string
-          description: 連絡先メールアドレス
+          format: email
+          description: 連絡先メールアドレス（前後空白 `trim` 後 6〜254文字、メール形式）
+          maxLength: 254
+          minLength: 6
         message:
           type: string
-          description: 問い合わせ本文
+          description: 問い合わせ本文（`trim`前 1〜5000文字）
+          maxLength: 5000
+          minLength: 1
         name:
           type: string
-          description: 氏名
+          description: 氏名（`trim`前 1〜100文字）
+          maxLength: 100
+          minLength: 1
     CreateInquiryResponse:
       type: object
       description: 問い合わせ作成レスポンス

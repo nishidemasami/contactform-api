@@ -74,8 +74,17 @@ impl InquiryRepository for SeaOrmInquiryRepository {
         );
 
         self.db.execute_raw(statement).await.map_err(|e| {
-            tracing::error!("問い合わせの保存に失敗しました: {:?}", e);
-            InquiryRepositoryError::Infrastructure
+            let is_unique_violation: bool = matches!(
+                e.sql_err(),
+                Some(sea_orm::SqlErr::UniqueConstraintViolation(_))
+            );
+            if is_unique_violation {
+                tracing::warn!("問い合わせIDが重複しました: {:?}", e);
+                InquiryRepositoryError::Duplicate
+            } else {
+                tracing::error!("問い合わせの保存に失敗しました: {:?}", e);
+                InquiryRepositoryError::Infrastructure
+            }
         })?;
 
         Ok(inquiry)

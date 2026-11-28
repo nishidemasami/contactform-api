@@ -20,9 +20,16 @@ impl OptionStrExt for Option<String> {
 }
 
 /// リクエストをルートに振り分ける
+///
+/// `raw_path` が未設定または空文字の場合は `request_context.http.path` にフォールバックする。
 pub fn route(request: &ApiGatewayV2httpRequest) -> Route {
     let method: &str = request.request_context.http.method.as_str();
-    let path: &str = request.raw_path.as_str();
+    let raw_path: &str = request.raw_path.as_str();
+    let path: &str = if !raw_path.is_empty() {
+        raw_path
+    } else {
+        request.request_context.http.path.as_str()
+    };
 
     route_method_and_path(method, path)
 }

@@ -176,9 +176,9 @@ uuid = { version = "1", default-features = false }
 - **どのロジックを形式手法で検証し、何を結合テストに委ねるのか**
   - AWS Lambda ランタイム・API Gateway・Aurora DSQL・`tokio`・`sea-orm` など外部システムや巨大クレートの I/O 自体は形式モデルが存在しないため、結合テスト（`sam local` + PostgreSQL + `pytest`）で検証する。
   - 一方、各レイヤーから非決定的 I/O を剥がした**決定論的ロジック（Verified Core）**は形式手法の投資対効果（ROI）が極めて高く、本プロジェクトでは以下の 3 レイヤー横断で証明を行っている。
-    1. **`domain` 層**: `validation.rs`（Verus + Kani：UTF-8 走査・空白判定・上限境界・不正バイト耐性）、`value_object.rs` / `entity.rs`（Kani：エラー全単射・前後空白保持・全フィールド保持）
+    1. **`domain` 層**: `validation.rs`（Verus + Kani：UTF-8 走査・単一パス `trim_utf8_range`・メール `trim` 後 254文字上限と RFC 5321/5322/1123 構文検証・その他文字列の `trim` 前文字数上限［100 / 5000］・C0/C1 制御文字／NUL 排除・不正バイト耐性）、`value_object.rs` / `entity.rs`（Kani：9バリアントエラー全単射・メール正規化・氏名／本文の前後空白保持・全フィールド保持）
     2. **`application` 層**: `CreateInquiryUsecase::execute_with_metadata`（Kani + `Waker::noop()`：不正入力時の DB 非アクセス保証［Fail-Fast］・正常保存1回保証・全リポジトリエラー伝播）
-    3. **`presentation` 層**: `lambda/http_decision.rs`（Verus + スタンドアロン Kani：CORS `OPTIONS` 最優先・単数 `/api/v1/inquiry` と複数 `/api/v1/inquiries` の非混同・内部リポジトリエラー詳細の `500 internal server error` への完全秘匿［情報非干渉］）
+    3. **`presentation` 層**: `lambda/http_decision.rs`（Verus + スタンドアロン Kani：未定義パスの 404 分離・既知パス CORS `OPTIONS` の 204 No Content・単数 `/api/v1/inquiry` と複数 `/api/v1/inquiries` の非混同・64KiB ボディ上限と Base64 拒否・内部リポジトリエラー詳細の `500 internal server error` への完全秘匿［情報非干渉］）
 - **なぜ `#![no_std]` が必須なのか**
   1. I/O・システム時刻・スレッド・システムコール等の非決定的副作用の混入をコンパイラレベルで遮断するため。
   2. `std` や AWS/DB SDK が引き込むバックトレース・スレッドローカル変数・暗号／通信スタック等を排除し、Kani（CBMC）の状態空間を極小化するため（`presentation` の `http_decision.rs` も `#![cfg_attr(any(kani, verus_keep_ghost), no_std)]` により単体ファイルで数秒検証可能にしている）。
@@ -196,7 +196,7 @@ Verus 導入には以下の 2 つのアプローチがある。
 
 **本プロジェクトの方針**:
 既存ワークスペースのビルド安定性・`no_std` 整合性・`--no-cheating`（公理追加禁止）を最優先し、**Verified Core 分離方式 ＋ Verus / Kani ハイブリッド検証**を標準ベストプラクティスとして採用する。
-このとき、Verified Core は検証用コピーではなく**本番の値オブジェクトや HTTP ルーター／ハンドラが直接呼び出す実コード**とし、自前実装したバイト比較・UTF-8 走査・Unicode 空白判定が Rust 標準ライブラリ（`==` / `char::is_whitespace` / `char::encode_utf8`）と完全一致することを Kani で証明して両ツールの境界ギャップを塞ぐ。
+このとき、Verified Core は検証用コピーではなく**本番の値オブジェクトや HTTP ルーター／ハンドラが直接呼び出す実コード**とし、自前実装したバイト比較・UTF-8 走査・Unicode 空白／制御文字判定が Rust 標準ライブラリ（`==` / `char::is_whitespace` / `char::is_control` / `char::encode_utf8`）と完全一致することを Kani で証明して両ツールの境界ギャップを塞ぐ。
 
 ### 7.3. 形式検証コードの実装ノウハウ・規約
 
@@ -223,7 +223,7 @@ Verus 導入には以下の 2 つのアプローチがある。
 ### 7.4. 今後のより良い改善案
 
 1. **【短期】CI キャッシュによる高速化**: GitHub Actions で `~/.kani`・`~/.local/verus`・`cargo-kani` を `actions/cache` でキャッシュし、毎回のコンパイル・ダウンロード時間を短縮する。
-2. **【中期】ドメイン仕様・API エンドポイント拡充への適用拡大**: メールアドレス構文ルール、制御文字禁止ルール、新規 API ルートや認可ルールが追加される際、同じく純粋 `no_std` コア（`validation.rs` / `http_decision.rs`）として実装し Verus / Kani の証明対象に加える。
+2. **【中期】新規状態遷移・エンドポイント追加時の Verified Core 拡張**: 問い合わせ状態遷移や新規 API エンドポイント・認可ルールが追加される際、同じく純粋 `no_std` コア（`validation.rs` / `http_decision.rs`）として実装し Verus / Kani の証明対象に加える。
 3. **【長期】インライン型不変条件（パターンB）と Wasm 共有の検討**: 将来ワークスペースの Rust ツールチェーン統一と `vstd` の `no_std` 対応が成熟した段階で、`#[verifier::type_invariant]` によるインライン方式への統合や、`domain` クレートの WebAssembly ビルドによるフロントエンドとの検証済みバリデーション共有を検討する。
 
 ---
