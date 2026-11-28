@@ -21,8 +21,34 @@ use crate::{
         request::CreateInquiryRequest,
         response::{CreateInquiryResponse, ErrorResponse},
     },
-    lambda::router::{Route, route},
+    lambda::{
+        http_decision::{
+            PublicErrorMessage, RepositoryFailureKind, UsecaseErrorCategory,
+            classify_repository_failure, decide_public_error, static_route_status_code,
+        },
+        router::{Route, route},
+    },
 };
+
+/// リポジトリエラーを形式検証済みコアの分類型へ写像する
+const fn map_repository_error_kind(error: &InquiryRepositoryError) -> RepositoryFailureKind {
+    match error {
+        InquiryRepositoryError::Duplicate => RepositoryFailureKind::Duplicate,
+        InquiryRepositoryError::NotFound => RepositoryFailureKind::NotFound,
+        InquiryRepositoryError::Infrastructure => RepositoryFailureKind::Infrastructure,
+        InquiryRepositoryError::CorruptedData => RepositoryFailureKind::CorruptedData,
+    }
+}
+
+/// ユースケースエラーを形式検証済みコアのエラー分類へ写像する
+const fn classify_create_inquiry_error(error: &CreateInquiryError) -> UsecaseErrorCategory {
+    match error {
+        CreateInquiryError::Domain(_) => UsecaseErrorCategory::DomainValidation,
+        CreateInquiryError::Repository(repo_err) => {
+            classify_repository_failure(map_repository_error_kind(repo_err))
+        }
+    }
+}
 
 /// Lambda ハンドラー
 ///
@@ -41,32 +67,45 @@ pub async fn handler(
     event: LambdaEvent<ApiGatewayV2httpRequest>,
 ) -> Result<ApiGatewayV2httpResponse, Error> {
     let (request, _): (ApiGatewayV2httpRequest, _) = event.into_parts();
+    let matched_route: Route = route(&request);
 
-    match route(&request) {
+    match matched_route {
         Route::CreateInquiry => create_inquiry(repository, request).await,
 
-        Route::Options => json_response(200, &"{}"),
+        Route::Options => {
+            let status: i64 = static_route_status_code(matched_route).unwrap_or(200);
+            json_response(status, &"{}")
+        }
 
-        Route::FindInquiries => json_response(
-            501,
-            &ErrorResponse {
-                message: "not implemented".into(),
-            },
-        ),
+        Route::FindInquiries => {
+            let status: i64 = static_route_status_code(matched_route).unwrap_or(501);
+            json_response(
+                status,
+                &ErrorResponse {
+                    message: "not implemented".into(),
+                },
+            )
+        }
 
-        Route::NotFound => json_response(
-            404,
-            &ErrorResponse {
-                message: "not found".into(),
-            },
-        ),
+        Route::NotFound => {
+            let status: i64 = static_route_status_code(matched_route).unwrap_or(404);
+            json_response(
+                status,
+                &ErrorResponse {
+                    message: "not found".into(),
+                },
+            )
+        }
 
-        Route::MethodNotAllowed => json_response(
-            405,
-            &ErrorResponse {
-                message: "method not allowed".into(),
-            },
-        ),
+        Route::MethodNotAllowed => {
+            let status: i64 = static_route_status_code(matched_route).unwrap_or(405);
+            json_response(
+                status,
+                &ErrorResponse {
+                    message: "method not allowed".into(),
+                },
+            )
+        }
     }
 }
 
@@ -101,29 +140,28 @@ async fn create_inquiry(
     match usecase.execute(input).await {
         Ok(output) => json_response(201, &CreateInquiryResponse { id: output.id }),
 
-        Err(CreateInquiryError::Domain(e)) => {
-            tracing::warn!("ドメインバリデーションエラー: {:?}", e);
-            json_response(
-                400,
-                &ErrorResponse {
-                    message: "invalid request".into(),
-                },
-            )
-        }
+        Err(err) => {
+            let category: UsecaseErrorCategory = classify_create_inquiry_error(&err);
+            let decision: (i64, PublicErrorMessage) = decide_public_error(category);
+            let status_code: i64 = decision.0;
+            let public_message: PublicErrorMessage = decision.1;
 
-        Err(CreateInquiryError::Repository(InquiryRepositoryError::Duplicate)) => json_response(
-            409,
-            &ErrorResponse {
-                message: "inquiry already exists".into(),
-            },
-        ),
+            match category {
+                UsecaseErrorCategory::DomainValidation => {
+                    tracing::warn!("ドメインバリデーションエラー: {:?}", err);
+                }
+                UsecaseErrorCategory::DuplicateConflict => {
+                    tracing::warn!("問い合わせ重複エラー: {:?}", err);
+                }
+                UsecaseErrorCategory::RepositoryInternal => {
+                    tracing::error!("問い合わせ作成エラー: {:?}", err);
+                }
+            }
 
-        Err(e) => {
-            tracing::error!("問い合わせ作成エラー: {:?}", e);
             json_response(
-                500,
+                status_code,
                 &ErrorResponse {
-                    message: "internal server error".into(),
+                    message: public_message.as_str().into(),
                 },
             )
         }

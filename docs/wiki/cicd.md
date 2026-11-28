@@ -58,13 +58,16 @@ validate → build → deploy（pushのみ）
 ### Rust（API / 全体検証）
 
 ```bash
-sam validate --lint                                                   # SAMテンプレート検証
-cargo fmt -- --check                                                  # フォーマット
-cargo check --workspace --all-targets --all-features                  # コンパイルチェック
-cargo clippy --workspace --all-targets --all-features -- -D warnings  # 静的解析
-verus --crate-type=lib --no-cheating core/domain/src/inquiry/validation.rs  # Verus形式検証（domain）
-cargo kani -p domain --output-format terse -j                         # Kani形式検証（domain）
-cargo test --workspace --all-features -- --include-ignored            # テスト（ignore含む）
+sam validate --lint                                                           # SAMテンプレート検証
+cargo fmt -- --check                                                          # フォーマット
+cargo check --workspace --all-targets --all-features                          # コンパイルチェック
+cargo clippy --workspace --all-targets --all-features -- -D warnings          # 静的解析
+verus --crate-type=lib --no-cheating core/domain/src/inquiry/validation.rs    # Verus形式検証（domain）
+verus --crate-type=lib --no-cheating core/presentation/src/lambda/http_decision.rs # Verus形式検証（presentation）
+cargo kani -p domain --output-format terse -j                                 # Kani形式検証（domain）
+cargo kani -p application --output-format terse -j                            # Kani形式検証（application）
+kani --output-format terse core/presentation/src/lambda/http_decision.rs      # Kani形式検証（presentation）
+cargo test --workspace --all-features -- --include-ignored                    # テスト（ignore含む）
 ```
 
 ### フロントエンド（Next.js）

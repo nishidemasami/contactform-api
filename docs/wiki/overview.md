@@ -34,7 +34,7 @@ AIによる開発を前提に、モノレポ構成でインフラ・アプリ・
         └─▶ /             → S3（フロントエンドSPA）※develop環境のみ
 ```
 
-- **API**: Rust + AWS Lambda（メモリ128MB、シングルスレッド、`core/domain` は `#![no_std]` ＋ Verus / Kani 形式検証済）
+- **API**: Rust + AWS Lambda（メモリ128MB、シングルスレッド、`core/domain` `#![no_std]` および `application`・`presentation` の決定論的コアを Verus / Kani で形式検証済）
 - **DB**: Amazon Aurora DSQL（PostgreSQL互換・サーバレス）
 - **インフラ**: AWS SAM（IaC）
 - **CI/CD**: GitHub Actions（フォーマット・Clippy・Verus / Kani 形式検証・単体／結合テスト・自動デプロイ）

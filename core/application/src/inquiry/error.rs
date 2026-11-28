@@ -5,7 +5,7 @@
 use domain::inquiry::{domain_error::InquiryDomainError, repository_error::InquiryRepositoryError};
 
 /// 問い合わせ作成エラー
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CreateInquiryError {
     /// ドメインバリデーションエラー
     #[error(transparent)]

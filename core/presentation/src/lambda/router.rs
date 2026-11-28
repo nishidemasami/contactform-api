@@ -4,30 +4,12 @@
 
 use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
 
-/// ルート定義
-///
-/// | バリアント | 説明 |
-/// |---|---|
-/// | `CreateInquiry` | `POST /api/v1/inquiry` |
-/// | `FindInquiries` | `GET /api/v1/inquiries` |
-/// | `NotFound` | 404 Not Found |
-/// | `MethodNotAllowed` | 405 Method Not Allowed |
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Route {
-    /// OPTIONS
-    Options,
-    /// POST /api/v1/inquiry - 問い合わせ作成
-    CreateInquiry,
-    /// GET /api/v1/inquiries - 問い合わせ一覧（未実装）
-    FindInquiries,
-    /// 404 Not Found
-    NotFound,
-    /// 405 Method Not Allowed
-    MethodNotAllowed,
-}
+pub use super::http_decision::Route;
+use super::http_decision::route_method_and_path;
 
-/// Option<String> から &str 参照を取得するヘルパートレイト
+/// `Option<String>` から `&str` 参照を取得するヘルパートレイト
 pub trait OptionStrExt {
+    /// 文字列スライス参照を返す（`None` の場合は空文字列）
     fn as_str(&self) -> &str;
 }
 
@@ -42,13 +24,7 @@ pub fn route(request: &ApiGatewayV2httpRequest) -> Route {
     let method: &str = request.request_context.http.method.as_str();
     let path: &str = request.raw_path.as_str();
 
-    match (method, path) {
-        ("OPTIONS", _) => Route::Options,
-        ("POST", "/api/v1/inquiry") => Route::CreateInquiry,
-        ("GET", "/api/v1/inquiries") => Route::FindInquiries,
-        (_, "/api/v1/inquiry") | (_, "/api/v1/inquiries") => Route::MethodNotAllowed,
-        _ => Route::NotFound,
-    }
+    route_method_and_path(method, path)
 }
 
 #[cfg(test)]

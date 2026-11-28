@@ -76,7 +76,7 @@ jobs:
       - name: cargo clippy の実行
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-      - name: Verusによる形式手法検証（domain）
+      - name: Verusによる形式手法検証（domain / presentation）
         run: |
           VERUS_VERSION="0.2026.11.22.1ce6a59"
           ARCH="$(uname -m)"
@@ -95,12 +95,15 @@ jobs:
           rm -f /tmp/verus.zip
           rustup toolchain install "$VERUS_TOOLCHAIN" --profile minimal --no-self-update
           "$HOME/.local/verus/${VERUS_DIR}/verus" --crate-type=lib --no-cheating core/domain/src/inquiry/validation.rs
+          "$HOME/.local/verus/${VERUS_DIR}/verus" --crate-type=lib --no-cheating core/presentation/src/lambda/http_decision.rs
 
-      - name: Kaniによる形式手法検証（domain）
+      - name: Kaniによる形式手法検証（domain / application / presentation）
         run: |
           cargo install --locked kani-verifier --version 0.68.0
           cargo kani setup
           cargo kani -p domain --output-format terse -j
+          cargo kani -p application --output-format terse -j
+          kani --output-format terse core/presentation/src/lambda/http_decision.rs
 
       - name: Liquibaseでローカルマイグレーション
         run: |

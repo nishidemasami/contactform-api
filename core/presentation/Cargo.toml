@@ -19,3 +19,6 @@ uuid = { workspace = true, features = ["serde", "std", "v7"] }
 
 [dev-dependencies]
 serde_json.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(verus_keep_ghost)'] }

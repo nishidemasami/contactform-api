@@ -508,6 +508,28 @@ pub proof fn lemma_all_whitespace_chars_rejected(chars: Seq<char>)
 {
 }
 
+/// 補題: 前後に空白があっても、少なくとも1つの非空白文字が存在すれば空白のみとは判定されない
+pub proof fn lemma_non_whitespace_char_makes_slice_non_empty(chars: Seq<char>, witness: int)
+    requires
+        0 <= witness < chars.len(),
+        !is_unicode_whitespace_codepoint_spec(chars[witness] as u32),
+    ensures
+        chars_has_non_whitespace_spec(chars),
+{
+    assert(!is_unicode_whitespace_codepoint_spec(chars[witness] as u32));
+}
+
+/// 補題: 不正・途切れたバイト列を含む任意のバイト列に対して UTF-8 1ステップ消費量は `1..=4` かつスライス範囲内に収まる
+pub proof fn lemma_decode_utf8_step_bounds(bytes: Seq<u8>, index: int)
+    requires
+        0 <= index < bytes.len(),
+    ensures
+        1 <= decode_utf8_codepoint_spec(bytes, index).1,
+        decode_utf8_codepoint_spec(bytes, index).1 <= 4,
+        index + decode_utf8_codepoint_spec(bytes, index).1 <= bytes.len(),
+{
+}
+
 }
 
 #[cfg(kani)]
@@ -532,6 +554,40 @@ mod kani_proofs {
         let decoded: (u32, usize) = decode_utf8_codepoint_at(encoded.as_bytes(), 0);
         assert_eq!(decoded.0, ch as u32);
         assert_eq!(decoded.1, ch.len_utf8());
+    }
+
+    /// 証明: 不正な UTF-8 バイト列を含む完全に任意の生バイト列（最大 6 バイト）に対し、
+    /// `scan_utf8_bytes` と `validate_utf8_bytes` がパニック・オーバーフローせず全域性を満たすこと
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn proof_scan_and_validate_arbitrary_raw_bytes_never_panic() {
+        let buf: [u8; 6] = kani::any();
+        let len: usize = kani::any();
+        kani::assume(len <= buf.len());
+
+        let max_chars: usize = kani::any();
+        let slice: &[u8] = &buf[..len];
+
+        let metrics: (bool, usize) = scan_utf8_bytes(slice);
+        let has_non_ws: bool = metrics.0;
+        let char_count: usize = metrics.1;
+
+        assert!(char_count <= len);
+        if has_non_ws {
+            assert!(char_count >= 1);
+        }
+        if len == 0 {
+            assert!(!has_non_ws && char_count == 0);
+        }
+
+        let result: Result<(), TextValidationError> = validate_utf8_bytes(slice, max_chars);
+        if !has_non_ws {
+            assert_eq!(result, Err(TextValidationError::Empty));
+        } else if char_count > max_chars {
+            assert_eq!(result, Err(TextValidationError::TooLong));
+        } else {
+            assert_eq!(result, Ok(()));
+        }
     }
 
     /// 証明: 任意の `(has_non_whitespace, char_count, max_chars)` に対して

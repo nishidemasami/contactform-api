@@ -27,6 +27,24 @@ impl InquiryId {
     }
 }
 
+/// 検証コアのエラーを対応するドメインエラーへ変換する
+///
+/// `(InquiryField, TextValidationError)` の全6通りの組合せを
+/// `InquiryDomainError` の全6バリアントへ1対1（全単射）で写像する。
+pub const fn map_validation_error(
+    field: InquiryField,
+    error: TextValidationError,
+) -> InquiryDomainError {
+    match (field, error) {
+        (InquiryField::Name, TextValidationError::Empty) => InquiryDomainError::EmptyName,
+        (InquiryField::Name, TextValidationError::TooLong) => InquiryDomainError::NameTooLong,
+        (InquiryField::Email, TextValidationError::Empty) => InquiryDomainError::EmptyEmail,
+        (InquiryField::Email, TextValidationError::TooLong) => InquiryDomainError::EmailTooLong,
+        (InquiryField::Message, TextValidationError::Empty) => InquiryDomainError::EmptyMessage,
+        (InquiryField::Message, TextValidationError::TooLong) => InquiryDomainError::MessageTooLong,
+    }
+}
+
 /// 氏名値オブジェクト
 ///
 /// ## バリデーション
@@ -48,8 +66,7 @@ impl InquiryName {
 
         match validate_field_str(InquiryField::Name, &value) {
             Ok(()) => Ok(Self(value)),
-            Err(TextValidationError::Empty) => Err(InquiryDomainError::EmptyName),
-            Err(TextValidationError::TooLong) => Err(InquiryDomainError::NameTooLong),
+            Err(err) => Err(map_validation_error(InquiryField::Name, err)),
         }
     }
 
@@ -80,8 +97,7 @@ impl InquiryEmail {
 
         match validate_field_str(InquiryField::Email, &value) {
             Ok(()) => Ok(Self(value)),
-            Err(TextValidationError::Empty) => Err(InquiryDomainError::EmptyEmail),
-            Err(TextValidationError::TooLong) => Err(InquiryDomainError::EmailTooLong),
+            Err(err) => Err(map_validation_error(InquiryField::Email, err)),
         }
     }
 
@@ -112,8 +128,7 @@ impl InquiryMessage {
 
         match validate_field_str(InquiryField::Message, &value) {
             Ok(()) => Ok(Self(value)),
-            Err(TextValidationError::Empty) => Err(InquiryDomainError::EmptyMessage),
-            Err(TextValidationError::TooLong) => Err(InquiryDomainError::MessageTooLong),
+            Err(err) => Err(map_validation_error(InquiryField::Message, err)),
         }
     }
 
@@ -130,6 +145,76 @@ mod kani_proofs {
         INQUIRY_EMAIL_MAX_CHARS, INQUIRY_MESSAGE_MAX_CHARS, INQUIRY_NAME_MAX_CHARS,
         validate_field_utf8,
     };
+
+    /// 証明: `(InquiryField, TextValidationError)` から `InquiryDomainError` への変換が
+    /// 全単射（項目取り違え・エラー種別取り違えが一切発生しないこと）
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn proof_map_validation_error_bijective() {
+        let pairs: [(InquiryField, TextValidationError); 6] = [
+            (InquiryField::Name, TextValidationError::Empty),
+            (InquiryField::Name, TextValidationError::TooLong),
+            (InquiryField::Email, TextValidationError::Empty),
+            (InquiryField::Email, TextValidationError::TooLong),
+            (InquiryField::Message, TextValidationError::Empty),
+            (InquiryField::Message, TextValidationError::TooLong),
+        ];
+
+        let mut i: usize = 0;
+        while i < pairs.len() {
+            let mut j: usize = i + 1;
+            while j < pairs.len() {
+                let lhs: InquiryDomainError = map_validation_error(pairs[i].0, pairs[i].1);
+                let rhs: InquiryDomainError = map_validation_error(pairs[j].0, pairs[j].1);
+                assert_ne!(lhs, rhs);
+                j += 1;
+            }
+            i += 1;
+        }
+    }
+
+    /// 証明: 前後に空白（先頭: 全角空白 `U+3000`、末尾: 任意の ASCII 空白・制御空白）を含む
+    /// 非空白文字列が全値オブジェクト（`InquiryName` / `InquiryEmail` / `InquiryMessage`）で
+    /// 妥当と判定され、トリムで破壊されず元のバイト列のまま保持されること
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn proof_surrounding_whitespace_preserved_when_valid() {
+        let core_byte: u8 = kani::any();
+        kani::assume(core_byte.is_ascii_graphic());
+
+        let ws_trail: u8 = kani::any();
+        kani::assume(matches!(
+            ws_trail,
+            b' ' | b'\t' | b'\n' | 0x0B | 0x0C | b'\r'
+        ));
+
+        let buf: [u8; 5] = [0xE3, 0x80, 0x80, core_byte, ws_trail];
+        // SAFETY:
+        // - `buf[0..3]` は `U+3000`（全角空白 `[0xE3, 0x80, 0x80]`）の正当な UTF-8 表現
+        // - `buf[3]` は `0x21..=0x7E` の印字可能 ASCII（1バイト UTF-8）
+        // - `buf[4]` は ASCII 空白文字 `0x09..=0x0D | 0x20`（1バイト UTF-8）
+        // したがって `buf` は常に正当な UTF-8 シーケンスである。
+        let text: &str = unsafe { core::str::from_utf8_unchecked(&buf) };
+        let owned: String = String::from(text);
+
+        let field_idx: u8 = kani::any();
+        kani::assume(field_idx < 3);
+
+        match field_idx {
+            0 => {
+                let vo: InquiryName = InquiryName::new(owned).unwrap();
+                assert_eq!(vo.value().as_bytes(), &buf);
+            }
+            1 => {
+                let vo: InquiryEmail = InquiryEmail::new(owned).unwrap();
+                assert_eq!(vo.value().as_bytes(), &buf);
+            }
+            _ => {
+                let vo: InquiryMessage = InquiryMessage::new(owned).unwrap();
+                assert_eq!(vo.value().as_bytes(), &buf);
+            }
+        }
+    }
 
     /// 証明: 任意の16バイトから生成した `Uuid` を `InquiryId` に格納し、値を完全に保持すること
     #[kani::proof]

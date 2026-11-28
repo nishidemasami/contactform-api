@@ -5,7 +5,7 @@
 use uuid::Uuid;
 
 /// 問い合わせ作成入力DTO
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateInquiryInput {
     /// 氏名
     pub name: String,
@@ -16,7 +16,7 @@ pub struct CreateInquiryInput {
 }
 
 /// 問い合わせ作成出力DTO
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateInquiryOutput {
     /// 生成された問い合わせID
     pub id: Uuid,
