@@ -53,11 +53,11 @@ const fn classify_create_inquiry_error(error: &CreateInquiryError) -> UsecaseErr
 
 /// Lambda ハンドラー
 ///
-/// ## フロー
+/// ## フロー（Lambda到達リクエスト）
 ///
 /// ```text
 /// `ApiGatewayV2httpRequest`
-///   └─▶ ルーティング
+///   └─▶ ルーティング（AWS環境でのCORSプリフライトOPTIONSはAPI Gatewayエッジで自動応答）
 ///         ├─▶ `OPTIONS /api/v1/inquiry` | `OPTIONS /api/v1/inquiries` → 204 (Empty Body)
 ///         ├─▶ `POST /api/v1/inquiry` → `create_inquiry` (201 / 400 / 409 / 500)
 ///         ├─▶ `GET /api/v1/inquiries` → 501

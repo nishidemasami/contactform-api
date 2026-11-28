@@ -1,6 +1,6 @@
 # コーディング規約（Rust）
 
-> 最終更新: 2026-11-27 | ソース: raw/00000001_コーディング規約と実装例.md, raw/00000011_形式手法による検証.md, raw/20260816_要件.md
+> 最終更新: 2026-11-28 | ソース: raw/00000001_コーディング規約と実装例.md, raw/00000011_形式手法による検証.md, raw/20260816_要件.md
 
 Rustの実装時のコーディング規約・アーキテクチャ方針・DDD実装方針・ドメイン層の形式手法検証規約を定める。
 
@@ -176,9 +176,9 @@ uuid = { version = "1", default-features = false }
 - **どのロジックを形式手法で検証し、何を結合テストに委ねるのか**
   - AWS Lambda ランタイム・API Gateway・Aurora DSQL・`tokio`・`sea-orm` など外部システムや巨大クレートの I/O 自体は形式モデルが存在しないため、結合テスト（`sam local` + PostgreSQL + `pytest`）で検証する。
   - 一方、各レイヤーから非決定的 I/O を剥がした**決定論的ロジック（Verified Core）**は形式手法の投資対効果（ROI）が極めて高く、本プロジェクトでは以下の 3 レイヤー横断で証明を行っている。
-    1. **`domain` 層**: `validation.rs`（Verus + Kani：UTF-8 走査・単一パス `trim_utf8_range`・メール `trim` 後 254文字上限と RFC 5321/5322/1123 構文検証・その他文字列の `trim` 前文字数上限［100 / 5000］・C0/C1 制御文字／NUL 排除・不正バイト耐性）、`value_object.rs` / `entity.rs`（Kani：9バリアントエラー全単射・メール正規化・氏名／本文の前後空白保持・全フィールド保持）
+    1. **`domain` 層**: `validation.rs`（Verus + Kani：UTF-8 走査・単一パス `trim_utf8_range` の全非空白文字保持と先頭/末尾非空白位置一致・メール `trim` 後 254文字上限と RFC 5321/5322/1123 完全構文仕様との同値 `<==>`・その他文字列の `trim` 前文字数上限［100 / 5000］・C0/C1 制御文字／NUL 排除・不正バイト耐性）、`value_object.rs` / `entity.rs`（Kani：9バリアントエラー全単射・メール正規化・氏名／本文の前後空白保持・タイムゾーンオフセットを含む全フィールド保持）
     2. **`application` 層**: `CreateInquiryUsecase::execute_with_metadata`（Kani + `Waker::noop()`：不正入力時の DB 非アクセス保証［Fail-Fast］・正常保存1回保証・全リポジトリエラー伝播）
-    3. **`presentation` 層**: `lambda/http_decision.rs`（Verus + スタンドアロン Kani：未定義パスの 404 分離・既知パス CORS `OPTIONS` の 204 No Content・単数 `/api/v1/inquiry` と複数 `/api/v1/inquiries` の非混同・64KiB ボディ上限と Base64 拒否・内部リポジトリエラー詳細の `500 internal server error` への完全秘匿［情報非干渉］）
+    3. **`presentation` 層**: `lambda/http_decision.rs`（Verus + スタンドアロン Kani：**Lambdaハンドラー到達リクエスト**における未定義パスの 404 分離・既知パス `OPTIONS` の 204 No Content・単数 `/api/v1/inquiry` と複数 `/api/v1/inquiries` の非混同・64KiB ボディ上限と Base64 拒否・内部リポジトリエラー詳細の `500 internal server error` への完全秘匿［情報非干渉］。※AWS本番/ステージングでは API Gateway `CorsConfiguration` がプリフライト `OPTIONS` にエッジで自動応答するため、ルーティング証明のスコープをインフラ境界と明確に区別する）
 - **なぜ `#![no_std]` が必須なのか**
   1. I/O・システム時刻・スレッド・システムコール等の非決定的副作用の混入をコンパイラレベルで遮断するため。
   2. `std` や AWS/DB SDK が引き込むバックトレース・スレッドローカル変数・暗号／通信スタック等を排除し、Kani（CBMC）の状態空間を極小化するため（`presentation` の `http_decision.rs` も `#![cfg_attr(any(kani, verus_keep_ghost), no_std)]` により単体ファイルで数秒検証可能にしている）。
@@ -202,6 +202,7 @@ Verus 導入には以下の 2 つのアプローチがある。
 
 #### Verus 記述ルール
 - ファイル全体を `verus! { ... }` で囲むと `rustfmt` や通常 `clippy` と干渉しやすいため、実行関数は通常の Rust 構文で記述し、`#[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(...))]` および `verus_proof_expr!` を使用する（`=~=` 等の ghost 等値表明は `proof! { ... }` で囲む）。
+- **片方向の必要条件（`==>`）で満足せず、必要十分条件（`<==>`）で完全契約を記述する**: 例えば `trim` の事後条件が「先頭が非空白」だけでは非空白文字を切り捨てる誤実装を通し、メール検証が「長さ・印字可能ASCII」の必要条件だけでは `a..b@example.com` の誤受理を通す。正規化範囲の完全保持（先頭より前と末尾より後がすべて空白であること）や構文規則の全体仕様を再帰 `spec fn` として定義し、実行結果との `<==>` 同値性を証明する。
 - `verus!` 外の定数には `#[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec)]`、単純な列挙型・構造体には `#[verifier::external_type_specification]` を付与する。
 - `forall` / `exists` 量化子には必ず `#[trigger]` を明示し、SMT ソルバのインスタンス化を安定させる。
 - CI では必ず `--no-cheating` を付与し、`assume` / `admit` / `external_body` の混入を禁止する。

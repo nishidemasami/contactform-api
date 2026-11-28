@@ -1,6 +1,6 @@
 # API規約
 
-> 最終更新: 2026-11-27 | ソース: raw/00000002_API規約と実装例.md, raw/00000001_コーディング規約と実装例.md
+> 最終更新: 2026-11-28 | ソース: raw/00000002_API規約と実装例.md, raw/00000001_コーディング規約と実装例.md
 
 バックエンドAPI（AWS Lambda）の設計および実装に関する規約。
 
@@ -104,11 +104,14 @@ main()
 
 **フィールドバリデーション規則**:
 
-| フィールド | 前後空白 | 文字数上限の検証対象 | 最大文字数 | 構文・禁止文字ルール |
+| フィールド | 前後空白 | 文字数上限の検証対象 | 最大文字数（Unicodeコードポイント） | 構文・禁止文字ルール |
 |---|---|---|---|---|
 | `name` | 保持 | **`trim`前の文字列** | `100` 文字 | 空・空白のみ不可、C0/C1制御文字（`\0`, `\r`, `\n`, `\t` 等）禁止 |
 | `email` | `trim` 正規化して保持 | **`trim`後の文字列** | `254` 文字 | 空不可、RFC 5321/5322 `dot-atom`（`local` 1..=64文字）+ RFC 1123 ドメイン（`domain` 4..=253文字、2ラベル以上、各ラベル 1..=63文字、TLD 2文字以上かつ英字含有） |
 | `message` | 保持 | **`trim`前の文字列** | `5000` 文字 | 空・空白のみ不可、`\t`・`\n`・`\r` 以外のC0/C1制御文字（NUL `\0` 等）禁止 |
+
+> **OpenAPIスキーマ（`api/openapi.yaml`）上の表現に関する注意**:
+> OpenAPIのJSONスキーマ制約は `trim` 前の生文字列に適用されるため、`CreateInquiryRequest.email` に `maxLength: 254` や `format: email` を直接付与すると、APIが受理する「有効な254文字のメールアドレス＋前後空白」がスキーマ検証で誤拒否される。そのため生JSONスキーマでは `minLength: 6` のみを課し、`trim` 正規化後の `6..=254` 文字・RFC構文制約を説明文およびドメイン層で担保する。
 
 **レスポンス**:
 - 作成成功: **HTTP 201 Created**（`{"id": "<UUID v7>"}`）
@@ -116,14 +119,17 @@ main()
 - ID重複エラー: **HTTP 409 Conflict**
 - サーバー内部エラー: **HTTP 500 Internal Server Error**
 
-### その他のルーティング仕様
+### その他のルーティング仕様（Lambdaハンドラー到達リクエスト）
 
 | メソッド・パス | ステータス | 説明 |
 |---|---|---|
-| `OPTIONS /api/v1/inquiry`, `OPTIONS /api/v1/inquiries` | **HTTP 204 No Content** | CORSプリフライト応答（空ボディ） |
+| `OPTIONS /api/v1/inquiry`, `OPTIONS /api/v1/inquiries` | **HTTP 204 No Content** | 既知APIパスへの `OPTIONS` 応答（空ボディ） |
 | `GET /api/v1/inquiries` | **HTTP 501 Not Implemented** | 問い合わせ一覧（未実装スタブ） |
 | 既知パスに対する上記以外のメソッド | **HTTP 405 Method Not Allowed** | 未許可メソッド |
-| 未定義パス（全メソッド） | **HTTP 404 Not Found** | 存在しないエンドポイント |
+| 未定義パス（全メソッド） | **HTTP 404 Not Found** | 存在しないエンドポイント（Lambda到達時） |
+
+> **API Gateway HTTP API の CORS 自動応答との境界**:
+> AWSデプロイ環境では `api/template.yaml` の `AWS::Serverless::HttpApi` に `CorsConfiguration` が設定されているため、許可 `Origin` 等を伴う CORS プリフライト `OPTIONS` リクエストは未知パスを含め **API Gateway エッジで自動応答** され、Lambda には到達しない。上表の `OPTIONS`（`204`）および未定義パス（`404`）のルーティング保証は、`sam local`・直接呼び出し・非プリフライト `OPTIONS` など **Lambda ハンドラーが受け取って処理するリクエスト** に適用される。
 
 ---
 

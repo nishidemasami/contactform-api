@@ -5,9 +5,12 @@
 //! ## 形式手法による検証（Verus / Kani）
 //!
 //! AWS SDK・HTTP・JSONシリアライザ等の重い外部依存から切り離した純粋決定コア
-//! （[`lambda::http_decision`]）に対し、CORS `OPTIONS` プリフライト優先・エンドポイント分離・
+//! （[`lambda::http_decision`]）に対し、Lambdaハンドラーへ到達したリクエストにおける
+//! 既知パスの `OPTIONS` 応答・未定義パスの `404` 分離・エンドポイント分離・
 //! HTTPステータスコード範囲・内部リポジトリエラーの情報非漏洩（サニタイズ）を
 //! Verus と Kani の双方で証明している。
+//! （※AWSデプロイ環境では `api/template.yaml` の `CorsConfiguration` により、
+//! CORSプリフライト `OPTIONS` はAPI Gatewayエッジで自動応答されLambdaへ到達しない場合がある。）
 //!
 //! | 検証項目 | コマンド例 |
 //! |---|---|

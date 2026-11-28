@@ -209,6 +209,209 @@ pub open spec fn chars_has_non_whitespace_spec(chars: Seq<char>) -> bool {
     exists|i: int| 0 <= i < chars.len() && !is_unicode_whitespace_codepoint_spec(#[trigger] chars[i] as u32)
 }
 
+/// 指定位置以降の最初の非空白 UTF-8 文字の開始バイト位置仕様（非空白文字がない場合は `0`）
+pub open spec fn utf8_first_non_ws_start_from_spec(bytes: Seq<u8>, index: int) -> int
+    decreases bytes.len() - index,
+{
+    if 0 <= index < bytes.len() {
+        let (cp, step): (u32, nat) = decode_utf8_codepoint_spec(bytes, index);
+        if !is_unicode_whitespace_codepoint_spec(cp) {
+            index
+        } else {
+            utf8_first_non_ws_start_from_spec(bytes, index + step)
+        }
+    } else {
+        0
+    }
+}
+
+/// 指定位置以降の最後の非空白 UTF-8 文字の直後バイト位置仕様（`acc` はそれ以前の最後の終了位置）
+pub open spec fn utf8_last_non_ws_end_from_spec(bytes: Seq<u8>, index: int, acc: int) -> int
+    decreases bytes.len() - index,
+{
+    if 0 <= index < bytes.len() {
+        let (cp, step): (u32, nat) = decode_utf8_codepoint_spec(bytes, index);
+        let next_acc: int = if !is_unicode_whitespace_codepoint_spec(cp) {
+            index + (step as int)
+        } else {
+            acc
+        };
+        utf8_last_non_ws_end_from_spec(bytes, index + step, next_acc)
+    } else {
+        acc
+    }
+}
+
+/// `index` から `stop` までのデコードされる全 UTF-8 文字が空白であり、ちょうど `stop` に到達するかの仕様
+pub open spec fn utf8_all_ws_until_spec(bytes: Seq<u8>, index: int, stop: int) -> bool
+    decreases stop - index,
+{
+    if 0 <= index < stop && stop <= bytes.len() {
+        let (cp, step): (u32, nat) = decode_utf8_codepoint_spec(bytes, index);
+        is_unicode_whitespace_codepoint_spec(cp)
+            && index + step <= stop
+            && utf8_all_ws_until_spec(bytes, index + step, stop)
+    } else {
+        index == stop
+    }
+}
+
+/// `trim` 後のバイト列スライス仕様
+pub open spec fn utf8_trimmed_subrange_spec(bytes: Seq<u8>) -> Seq<u8> {
+    let start: int = utf8_first_non_ws_start_from_spec(bytes, 0);
+    let end: int = utf8_last_non_ws_end_from_spec(bytes, 0, 0);
+    if 0 <= start <= end <= bytes.len() {
+        bytes.subrange(start, end)
+    } else {
+        Seq::empty()
+    }
+}
+
+/// ASCII 英字仕様
+pub open spec fn is_ascii_alpha_byte_spec(b: u8) -> bool {
+    (0x41u8 <= b && b <= 0x5Au8) || (0x61u8 <= b && b <= 0x7Au8)
+}
+
+/// ASCII 数字仕様
+pub open spec fn is_ascii_digit_byte_spec(b: u8) -> bool {
+    0x30u8 <= b && b <= 0x39u8
+}
+
+/// RFC 5322 §3.2.3 `atext` 仕様
+pub open spec fn is_email_atext_byte_spec(b: u8) -> bool {
+    is_ascii_alpha_byte_spec(b)
+        || is_ascii_digit_byte_spec(b)
+        || b == b'!'
+        || b == b'#'
+        || b == b'$'
+        || b == b'%'
+        || b == b'&'
+        || b == b'\''
+        || b == b'*'
+        || b == b'+'
+        || b == b'-'
+        || b == b'/'
+        || b == b'='
+        || b == b'?'
+        || b == b'^'
+        || b == b'_'
+        || b == b'`'
+        || b == b'{'
+        || b == b'|'
+        || b == b'}'
+        || b == b'~'
+}
+
+/// 全バイトが空白を含まない印字可能 ASCII（`0x21..=0x7E`）であるかの仕様
+pub open spec fn is_printable_ascii_no_space_seq_spec(bytes: Seq<u8>) -> bool {
+    forall|k: int| 0 <= k < bytes.len() ==> (0x21u8 <= #[trigger] bytes[k] && bytes[k] <= 0x7Eu8)
+}
+
+/// 指定位置 `pos` が唯一の `@`（`0x40`）であるかの仕様
+pub open spec fn is_unique_at_position_spec(bytes: Seq<u8>, pos: int) -> bool {
+    0 <= pos < bytes.len()
+        && bytes[pos] == 0x40u8
+        && forall|k: int| 0 <= k < bytes.len() && k != pos ==> #[trigger] bytes[k] != 0x40u8
+}
+
+/// メールアドレスのローカル部（RFC 5321/5322 `dot-atom-text`、`1..=64` 文字）の完全仕様
+pub open spec fn is_valid_email_local_part_spec(local: Seq<u8>) -> bool {
+    1 <= local.len()
+        && local.len() <= INQUIRY_EMAIL_LOCAL_MAX_CHARS as int
+        && local[0] != 0x2Eu8
+        && local[local.len() - 1] != 0x2Eu8
+        && (forall|i: int|
+            0 <= i < local.len()
+                ==> (is_email_atext_byte_spec(#[trigger] local[i]) || local[i] == 0x2Eu8))
+        && (forall|i: int|
+            0 <= i < local.len() - 1
+                ==> !(#[trigger] local[i] == 0x2Eu8 && local[i + 1] == 0x2Eu8))
+}
+
+/// ドメイン部のラベル列走査仕様（各ラベル `1..=63` 文字・先頭末尾 `-` 不可・2ラベル以上・末尾 TLD 2文字以上かつ英字含有）
+pub open spec fn email_domain_labels_valid_from_spec(
+    domain: Seq<u8>,
+    index: int,
+    dot_count: nat,
+    label_len: nat,
+    label_has_alpha: bool,
+    prev_was_hyphen: bool,
+) -> bool
+    decreases domain.len() - index,
+{
+    if 0 <= index < domain.len() {
+        let b: u8 = domain[index];
+        if b == 0x2Eu8 {
+            label_len > 0
+                && !prev_was_hyphen
+                && email_domain_labels_valid_from_spec(
+                    domain,
+                    index + 1,
+                    dot_count + 1,
+                    0,
+                    false,
+                    false,
+                )
+        } else if is_ascii_alpha_byte_spec(b) {
+            label_len < INQUIRY_EMAIL_LABEL_MAX_CHARS as nat
+                && email_domain_labels_valid_from_spec(
+                    domain,
+                    index + 1,
+                    dot_count,
+                    label_len + 1,
+                    true,
+                    false,
+                )
+        } else if is_ascii_digit_byte_spec(b) {
+            label_len < INQUIRY_EMAIL_LABEL_MAX_CHARS as nat
+                && email_domain_labels_valid_from_spec(
+                    domain,
+                    index + 1,
+                    dot_count,
+                    label_len + 1,
+                    label_has_alpha,
+                    false,
+                )
+        } else if b == 0x2Du8 {
+            label_len > 0
+                && label_len < INQUIRY_EMAIL_LABEL_MAX_CHARS as nat
+                && email_domain_labels_valid_from_spec(
+                    domain,
+                    index + 1,
+                    dot_count,
+                    label_len + 1,
+                    label_has_alpha,
+                    true,
+                )
+        } else {
+            false
+        }
+    } else {
+        dot_count >= 1 && label_len >= 2 && !prev_was_hyphen && label_has_alpha
+    }
+}
+
+/// メールアドレスのドメイン部（RFC 1035 / RFC 1123、`4..=253` 文字）の完全仕様
+pub open spec fn is_valid_email_domain_part_spec(domain: Seq<u8>) -> bool {
+    4 <= domain.len()
+        && domain.len() <= INQUIRY_EMAIL_DOMAIN_MAX_CHARS as int
+        && domain[0] != 0x2Eu8
+        && domain[0] != 0x2Du8
+        && email_domain_labels_valid_from_spec(domain, 0, 0, 0, false, false)
+}
+
+/// トリム済みメールアドレス全体の RFC 5321/5322/1123 実運用プロファイル完全仕様
+pub open spec fn is_valid_email_syntax_spec(bytes: Seq<u8>) -> bool {
+    bytes.len() <= INQUIRY_EMAIL_MAX_CHARS as int
+        && is_printable_ascii_no_space_seq_spec(bytes)
+        && exists|at_pos: int|
+            #[trigger] is_unique_at_position_spec(bytes, at_pos)
+                && is_valid_email_local_part_spec(bytes.subrange(0, at_pos))
+                && is_valid_email_domain_part_spec(
+                    bytes.subrange(at_pos + 1, bytes.len() as int),
+                )
+}
+
 }
 
 impl InquiryField {
@@ -488,19 +691,36 @@ pub fn scan_utf8_for_field(field: InquiryField, bytes: &[u8]) -> (bool, usize, b
     (has_non_whitespace, char_count, has_disallowed_control)
 }
 
-/// 単一の前方 UTF-8 走査によって、前後の Unicode 空白を除いたバイト範囲 `(start, end)` を算出する
+/// 単一の前方 UTF-8 走査によって、前後の Unicode 空白を除いた厳密なバイト範囲 `(start, end)` を算出する
 ///
-/// 非空白文字が存在しない場合は `(0, 0)` を返す。
+/// ## 保証される不変条件（全非空白文字の完全保持）
+///
+/// - `start` は最初の非空白 UTF-8 文字の開始位置（`0..start` のデコード文字はすべて空白）
+/// - `end` は最後の非空白 UTF-8 文字の直後位置（`end..bytes.len()` に非空白文字は一切存在しない）
+/// - 非空白文字が1つも存在しない場合に限り `(0, 0)` を返す
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
+        res.0 as int == utf8_first_non_ws_start_from_spec(bytes@, 0),
+        res.1 as int == utf8_last_non_ws_end_from_spec(bytes@, 0, 0),
         res.0 <= res.1,
         res.1 <= bytes.len(),
         (res.0 == res.1) <==> !utf8_has_non_whitespace_from_spec(bytes@, 0),
+        !utf8_has_non_whitespace_from_spec(bytes@, 0) ==> (res.0 == 0 && res.1 == 0),
         utf8_has_non_whitespace_from_spec(bytes@, 0) ==> (
             res.0 < res.1
+                && utf8_all_ws_until_spec(bytes@, 0, res.0 as int)
                 && !is_unicode_whitespace_codepoint_spec(
                     decode_utf8_codepoint_spec(bytes@, res.0 as int).0,
                 )
+                && !utf8_has_non_whitespace_from_spec(bytes@, res.1 as int)
+                && exists|last_start: int|
+                    res.0 as int <= last_start < res.1 as int
+                        && res.1 as int
+                            == last_start
+                                + (decode_utf8_codepoint_spec(bytes@, last_start).1 as int)
+                        && !is_unicode_whitespace_codepoint_spec(
+                            #[trigger] decode_utf8_codepoint_spec(bytes@, last_start).0,
+                        )
         ),
 ))]
 pub fn trim_utf8_range(bytes: &[u8]) -> (usize, usize) {
@@ -514,16 +734,35 @@ pub fn trim_utf8_range(bytes: &[u8]) -> (usize, usize) {
         verus_builtin_macros::verus_proof_expr!({
             invariant([
                 0 <= index <= bytes.len(),
-                !has_non_whitespace ==> (first_start == 0 && last_end == 0),
-                has_non_whitespace ==> (first_start < last_end && last_end <= index),
-                (has_non_whitespace || utf8_has_non_whitespace_from_spec(bytes@, index as int))
-                    == utf8_has_non_whitespace_from_spec(bytes@, 0),
+                !has_non_whitespace ==> (
+                    first_start == 0
+                        && last_end == 0
+                        && utf8_first_non_ws_start_from_spec(bytes@, index as int)
+                            == utf8_first_non_ws_start_from_spec(bytes@, 0)
+                ),
                 has_non_whitespace ==> (
-                    first_start < bytes.len()
+                    first_start < last_end
+                        && last_end <= index
+                        && first_start as int == utf8_first_non_ws_start_from_spec(bytes@, 0)
+                        && first_start < bytes.len()
                         && !is_unicode_whitespace_codepoint_spec(
                             decode_utf8_codepoint_spec(bytes@, first_start as int).0,
                         )
+                        && utf8_has_non_whitespace_from_spec(bytes@, last_end as int)
+                            == utf8_has_non_whitespace_from_spec(bytes@, index as int)
+                        && exists|last_start: int|
+                            first_start as int <= last_start < last_end as int
+                                && last_end as int
+                                    == last_start
+                                        + (decode_utf8_codepoint_spec(bytes@, last_start).1 as int)
+                                && !is_unicode_whitespace_codepoint_spec(
+                                    #[trigger] decode_utf8_codepoint_spec(bytes@, last_start).0,
+                                )
                 ),
+                utf8_last_non_ws_end_from_spec(bytes@, index as int, last_end as int)
+                    == utf8_last_non_ws_end_from_spec(bytes@, 0, 0),
+                (has_non_whitespace || utf8_has_non_whitespace_from_spec(bytes@, index as int))
+                    == utf8_has_non_whitespace_from_spec(bytes@, 0),
             ]);
             decreases(bytes.len() - index);
         });
@@ -539,10 +778,30 @@ pub fn trim_utf8_range(bytes: &[u8]) -> (usize, usize) {
                 has_non_whitespace = true;
             }
             last_end = next_index;
+
+            #[cfg(verus_keep_ghost)]
+            verus_builtin_macros::verus_proof_expr!({
+                proof! {
+                    let witness: int = index as int;
+                    assert(first_start as int <= witness < last_end as int);
+                    assert(!is_unicode_whitespace_codepoint_spec(
+                        decode_utf8_codepoint_spec(bytes@, witness).0,
+                    ));
+                }
+            });
         }
 
         index = next_index;
     }
+
+    #[cfg(verus_keep_ghost)]
+    verus_builtin_macros::verus_proof_expr!({
+        proof! {
+            if has_non_whitespace {
+                lemma_first_non_ws_prefix_is_all_whitespace(bytes@, 0);
+            }
+        }
+    });
 
     (first_start, last_end)
 }
@@ -550,7 +809,7 @@ pub fn trim_utf8_range(bytes: &[u8]) -> (usize, usize) {
 /// ASCII 英字（`A-Z` または `a-z`）か判定する
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
-        res <==> ((0x41u8 <= b && b <= 0x5Au8) || (0x61u8 <= b && b <= 0x7Au8)),
+        res <==> is_ascii_alpha_byte_spec(b),
 ))]
 pub const fn is_ascii_alpha_byte(b: u8) -> bool {
     (b'A' <= b && b <= b'Z') || (b'a' <= b && b <= b'z')
@@ -559,7 +818,7 @@ pub const fn is_ascii_alpha_byte(b: u8) -> bool {
 /// ASCII 数字（`0-9`）か判定する
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
-        res <==> (0x30u8 <= b && b <= 0x39u8),
+        res <==> is_ascii_digit_byte_spec(b),
 ))]
 pub const fn is_ascii_digit_byte(b: u8) -> bool {
     b'0' <= b && b <= b'9'
@@ -568,6 +827,7 @@ pub const fn is_ascii_digit_byte(b: u8) -> bool {
 /// RFC 5322 §3.2.3 の `atext`（ローカル部で使用可能な非ドット ASCII 文字）か判定する
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
+        res <==> is_email_atext_byte_spec(b),
         res ==> (0x21u8 <= b && b <= 0x7Eu8 && b != 0x40u8 && b != 0x2Eu8),
 ))]
 pub const fn is_email_atext_byte(b: u8) -> bool {
@@ -602,16 +862,13 @@ pub const fn is_email_atext_byte(b: u8) -> bool {
     ensures
         match res {
             Some(pos) => {
-                pos < bytes.len()
-                    && bytes@[pos as int] == 0x40u8
-                    && (forall|k: int|
-                        0 <= k < bytes@.len()
-                            ==> (0x21u8 <= #[trigger] bytes@[k] && bytes@[k] <= 0x7Eu8))
-                    && (forall|k: int|
-                        0 <= k < bytes@.len() && k != pos as int
-                            ==> #[trigger] bytes@[k] != 0x40u8)
+                is_printable_ascii_no_space_seq_spec(bytes@)
+                    && is_unique_at_position_spec(bytes@, pos as int)
             }
-            None => true,
+            None => {
+                !is_printable_ascii_no_space_seq_spec(bytes@)
+                    || forall|pos: int| !#[trigger] is_unique_at_position_spec(bytes@, pos)
+            }
         },
 ))]
 pub fn find_unique_at_and_check_printable_ascii(bytes: &[u8]) -> Option<usize> {
@@ -640,11 +897,32 @@ pub fn find_unique_at_and_check_printable_ascii(bytes: &[u8]) -> Option<usize> {
 
         let b: u8 = bytes[index];
         if !matches!(b, 0x21u8..=0x7Eu8) {
+            #[cfg(verus_keep_ghost)]
+            verus_builtin_macros::verus_proof_expr!({
+                proof! {
+                    assert(!(0x21u8 <= bytes@[index as int] && bytes@[index as int] <= 0x7Eu8));
+                }
+            });
             return None;
         }
 
         if b == b'@' {
             if found_at {
+                #[cfg(verus_keep_ghost)]
+                verus_builtin_macros::verus_proof_expr!({
+                    proof! {
+                        assert forall|pos: int|
+                            !#[trigger] is_unique_at_position_spec(bytes@, pos) by {
+                            if pos == at_pos as int {
+                                assert(index as int != pos);
+                                assert(bytes@[index as int] == 0x40u8);
+                            } else if 0 <= pos < bytes@.len() {
+                                assert(at_pos as int != pos);
+                                assert(bytes@[at_pos as int] == 0x40u8);
+                            }
+                        }
+                    }
+                });
                 return None;
             }
             found_at = true;
@@ -654,7 +932,21 @@ pub fn find_unique_at_and_check_printable_ascii(bytes: &[u8]) -> Option<usize> {
         index += 1;
     }
 
-    if found_at { Some(at_pos) } else { None }
+    if found_at {
+        Some(at_pos)
+    } else {
+        #[cfg(verus_keep_ghost)]
+        verus_builtin_macros::verus_proof_expr!({
+            proof! {
+                assert forall|pos: int| !#[trigger] is_unique_at_position_spec(bytes@, pos) by {
+                    if 0 <= pos < bytes@.len() {
+                        assert(bytes@[pos] != 0x40u8);
+                    }
+                }
+            }
+        });
+        None
+    }
 }
 
 /// メールアドレスのローカル部（`dot-atom-text`、`1..=64` 文字）を検証する
@@ -664,12 +956,7 @@ pub fn find_unique_at_and_check_printable_ascii(bytes: &[u8]) -> Option<usize> {
 /// - 先頭 `.`、末尾 `.`、連続する `..` を禁止
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
-        res ==> (
-            1 <= local.len()
-                && local.len() <= INQUIRY_EMAIL_LOCAL_MAX_CHARS
-                && local@[0] != 0x2Eu8
-                && local@[local.len() - 1] != 0x2Eu8
-        ),
+        res <==> is_valid_email_local_part_spec(local@),
 ))]
 pub fn is_valid_email_local_part(local: &[u8]) -> bool {
     let len: usize = local.len();
@@ -689,6 +976,15 @@ pub fn is_valid_email_local_part(local: &[u8]) -> bool {
                 len == local.len(),
                 0 <= index <= len,
                 1 <= len <= INQUIRY_EMAIL_LOCAL_MAX_CHARS,
+                local@[0] != 0x2Eu8,
+                local@[len - 1] != 0x2Eu8,
+                forall|k: int|
+                    0 <= k < index
+                        ==> (is_email_atext_byte_spec(#[trigger] local@[k])
+                            || local@[k] == 0x2Eu8),
+                forall|k: int|
+                    0 <= k < index && k < len - 1
+                        ==> !(#[trigger] local@[k] == 0x2Eu8 && local@[k + 1] == 0x2Eu8),
             ]);
             decreases(len - index);
         });
@@ -696,9 +992,22 @@ pub fn is_valid_email_local_part(local: &[u8]) -> bool {
         let b: u8 = local[index];
         if b == b'.' {
             if index + 1 < len && local[index + 1] == b'.' {
+                #[cfg(verus_keep_ghost)]
+                verus_builtin_macros::verus_proof_expr!({
+                    proof! {
+                        assert(local@[index as int] == 0x2Eu8 && local@[index + 1] == 0x2Eu8);
+                    }
+                });
                 return false;
             }
         } else if !is_email_atext_byte(b) {
+            #[cfg(verus_keep_ghost)]
+            verus_builtin_macros::verus_proof_expr!({
+                proof! {
+                    assert(!is_email_atext_byte_spec(local@[index as int])
+                        && local@[index as int] != 0x2Eu8);
+                }
+            });
             return false;
         }
 
@@ -716,12 +1025,7 @@ pub fn is_valid_email_local_part(local: &[u8]) -> bool {
 /// - 最上位ラベル（末尾 TLD）は **2文字以上** かつ **ASCII 英字を1文字以上含む** こと
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
-        res ==> (
-            4 <= domain.len()
-                && domain.len() <= INQUIRY_EMAIL_DOMAIN_MAX_CHARS
-                && domain@[0] != 0x2Eu8
-                && domain@[0] != 0x2Du8
-        ),
+        res <==> is_valid_email_domain_part_spec(domain@),
 ))]
 pub fn is_valid_email_domain_part(domain: &[u8]) -> bool {
     let len: usize = domain.len();
@@ -746,8 +1050,18 @@ pub fn is_valid_email_domain_part(domain: &[u8]) -> bool {
                 len == domain.len(),
                 0 <= index <= len,
                 4 <= len <= INQUIRY_EMAIL_DOMAIN_MAX_CHARS,
+                domain@[0] != 0x2Eu8,
+                domain@[0] != 0x2Du8,
                 dot_count <= index,
                 label_len <= INQUIRY_EMAIL_LABEL_MAX_CHARS,
+                email_domain_labels_valid_from_spec(
+                    domain@,
+                    index as int,
+                    dot_count as nat,
+                    label_len as nat,
+                    label_has_alpha,
+                    prev_was_hyphen,
+                ) == email_domain_labels_valid_from_spec(domain@, 0, 0, 0, false, false),
             ]);
             decreases(len - index);
         });
@@ -793,12 +1107,11 @@ pub fn is_valid_email_domain_part(domain: &[u8]) -> bool {
 /// トリム済みバイト列が RFC 5321 / 5322 実運用プロファイルのメールアドレス構文を満たすか判定する
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
+        res <==> is_valid_email_syntax_spec(bytes@),
         res ==> (
             6 <= bytes.len()
                 && bytes.len() <= INQUIRY_EMAIL_MAX_CHARS
-                && forall|k: int|
-                    0 <= k < bytes@.len()
-                        ==> (0x21u8 <= #[trigger] bytes@[k] && bytes@[k] <= 0x7Eu8)
+                && is_printable_ascii_no_space_seq_spec(bytes@)
         ),
 ))]
 pub fn is_valid_email_syntax_bytes(bytes: &[u8]) -> bool {
@@ -814,27 +1127,77 @@ pub fn is_valid_email_syntax_bytes(bytes: &[u8]) -> bool {
     let local: &[u8] = &bytes[..at_pos];
     let domain: &[u8] = &bytes[at_pos + 1..];
 
-    is_valid_email_local_part(local) && is_valid_email_domain_part(domain)
+    let ok: bool = is_valid_email_local_part(local) && is_valid_email_domain_part(domain);
+
+    #[cfg(verus_keep_ghost)]
+    verus_builtin_macros::verus_proof_expr!({
+        proof! {
+            assert(local@ =~= bytes@.subrange(0, at_pos as int));
+            assert(domain@ =~= bytes@.subrange(at_pos as int + 1, bytes@.len() as int));
+            if ok {
+                let witness: int = at_pos as int;
+                assert(is_unique_at_position_spec(bytes@, witness));
+                assert(is_valid_email_local_part_spec(bytes@.subrange(0, witness)));
+                assert(is_valid_email_domain_part_spec(
+                    bytes@.subrange(witness + 1, bytes@.len() as int),
+                ));
+            } else {
+                assert forall|other_pos: int| !(
+                    #[trigger] is_unique_at_position_spec(bytes@, other_pos)
+                        && is_valid_email_local_part_spec(bytes@.subrange(0, other_pos))
+                        && is_valid_email_domain_part_spec(
+                            bytes@.subrange(other_pos + 1, bytes@.len() as int),
+                        )
+                ) by {
+                    if is_unique_at_position_spec(bytes@, other_pos) {
+                        if other_pos != at_pos as int {
+                            assert(bytes@[at_pos as int] == 0x40u8);
+                            assert(false);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    ok
 }
 
 /// メールアドレスの UTF-8 バイト列を前後 `trim` のうえ検証し、正規化済みスライス範囲 `(start, end)` を返す
 ///
-/// ## 優先順位
+/// ## 優先順位と完全同値仕様
 ///
 /// 1. `trim` 後に空文字 → `Err(TextValidationError::Empty)`
 /// 2. `trim` 後の文字数が `254` 文字超 → `Err(TextValidationError::TooLong)`
 /// 3. メールアドレス構文違反 → `Err(TextValidationError::InvalidFormat)`
-/// 4. 上記すべて通過 → `Ok((start, end))`（`6 <= end - start <= 254` かつ全バイトが ASCII `0x21..=0x7E`）
+/// 4. 上記すべて通過 → `Ok((start, end))`（`utf8_trimmed_subrange_spec` と一致し `is_valid_email_syntax_spec` を完全に充足）
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
         res == Err(TextValidationError::Empty)
             <==> !utf8_has_non_whitespace_from_spec(bytes@, 0),
+        res == Err(TextValidationError::TooLong) <==> (
+            utf8_has_non_whitespace_from_spec(bytes@, 0)
+                && utf8_char_count_from_spec(utf8_trimmed_subrange_spec(bytes@), 0)
+                    > INQUIRY_EMAIL_MAX_CHARS as nat
+        ),
+        res == Err(TextValidationError::InvalidFormat) <==> (
+            utf8_has_non_whitespace_from_spec(bytes@, 0)
+                && utf8_char_count_from_spec(utf8_trimmed_subrange_spec(bytes@), 0)
+                    <= INQUIRY_EMAIL_MAX_CHARS as nat
+                && !is_valid_email_syntax_spec(utf8_trimmed_subrange_spec(bytes@))
+        ),
         match res {
             Ok((start, end)) => {
-                start < end
+                utf8_has_non_whitespace_from_spec(bytes@, 0)
+                    && start as int == utf8_first_non_ws_start_from_spec(bytes@, 0)
+                    && end as int == utf8_last_non_ws_end_from_spec(bytes@, 0, 0)
+                    && start < end
                     && end <= bytes.len()
                     && 6 <= end - start
                     && end - start <= INQUIRY_EMAIL_MAX_CHARS
+                    && utf8_all_ws_until_spec(bytes@, 0, start as int)
+                    && !utf8_has_non_whitespace_from_spec(bytes@, end as int)
+                    && is_valid_email_syntax_spec(bytes@.subrange(start as int, end as int))
                     && forall|k: int|
                         start as int <= k < end as int
                             ==> (0x21u8 <= #[trigger] bytes@[k] && bytes@[k] <= 0x7Eu8)
@@ -852,6 +1215,13 @@ pub fn validate_email_utf8(bytes: &[u8]) -> Result<(usize, usize), TextValidatio
     }
 
     let trimmed: &[u8] = &bytes[start..end];
+    #[cfg(verus_keep_ghost)]
+    verus_builtin_macros::verus_proof_expr!({
+        proof! {
+            assert(trimmed@ =~= utf8_trimmed_subrange_spec(bytes@));
+        }
+    });
+
     let trimmed_metrics: (bool, usize) = scan_utf8_bytes(trimmed);
     let trimmed_char_count: usize = trimmed_metrics.1;
 
@@ -968,6 +1338,14 @@ pub fn validate_chars(chars: &[char], max_chars: usize) -> Result<(), TextValida
                     && utf8_has_disallowed_control_from_spec(field, bytes@, 0)
             )
         ),
+        (field == InquiryField::Email) ==> (
+            res.is_ok() <==> (
+                utf8_has_non_whitespace_from_spec(bytes@, 0)
+                    && utf8_char_count_from_spec(utf8_trimmed_subrange_spec(bytes@), 0)
+                        <= INQUIRY_EMAIL_MAX_CHARS as nat
+                    && is_valid_email_syntax_spec(utf8_trimmed_subrange_spec(bytes@))
+            )
+        ),
 ))]
 pub fn validate_field_utf8(field: InquiryField, bytes: &[u8]) -> Result<(), TextValidationError> {
     match field {
@@ -997,6 +1375,172 @@ pub fn validate_field_str(field: InquiryField, value: &str) -> Result<(), TextVa
 
 #[cfg(verus_keep_ghost)]
 verus! {
+
+/// 補題: 最初の非空白文字の位置 `utf8_first_non_ws_start_from_spec` より前の文字はすべて空白である
+pub proof fn lemma_first_non_ws_prefix_is_all_whitespace(bytes: Seq<u8>, index: int)
+    requires
+        0 <= index <= bytes.len(),
+        utf8_has_non_whitespace_from_spec(bytes, index),
+    ensures
+        index <= utf8_first_non_ws_start_from_spec(bytes, index) < bytes.len(),
+        utf8_all_ws_until_spec(
+            bytes,
+            index,
+            utf8_first_non_ws_start_from_spec(bytes, index),
+        ),
+    decreases bytes.len() - index,
+{
+    let (cp, step): (u32, nat) = decode_utf8_codepoint_spec(bytes, index);
+    if is_unicode_whitespace_codepoint_spec(cp) {
+        lemma_decode_utf8_step_bounds(bytes, index);
+        lemma_first_non_ws_prefix_is_all_whitespace(bytes, index + step);
+    }
+}
+
+/// 補題: ドメインラベル列仕様を満たす任意位置からは、連続ドット・先頭末尾ハイフン・不正文字・空/1文字TLDが決して生じない
+pub proof fn lemma_email_domain_labels_declarative_invariants(
+    domain: Seq<u8>,
+    index: int,
+    dot_count: nat,
+    label_len: nat,
+    label_has_alpha: bool,
+    prev_was_hyphen: bool,
+)
+    requires
+        0 <= index <= domain.len(),
+        email_domain_labels_valid_from_spec(
+            domain,
+            index,
+            dot_count,
+            label_len,
+            label_has_alpha,
+            prev_was_hyphen,
+        ),
+    ensures
+        (index == domain.len()) ==> (
+            dot_count >= 1 && label_len >= 2 && !prev_was_hyphen && label_has_alpha
+        ),
+        (index < domain.len() && label_len == 0) ==> (
+            domain[index] != 0x2Eu8 && domain[index] != 0x2Du8 && index < domain.len() - 1
+        ),
+        (index < domain.len() && prev_was_hyphen) ==> domain[index] != 0x2Eu8,
+        (dot_count == 0) ==> exists|dot_idx: int|
+            index <= dot_idx < domain.len() && #[trigger] domain[dot_idx] == 0x2Eu8,
+        forall|k: int|
+            index <= k < domain.len() ==> (
+                is_ascii_alpha_byte_spec(#[trigger] domain[k])
+                    || is_ascii_digit_byte_spec(domain[k])
+                    || domain[k] == 0x2Du8
+                    || domain[k] == 0x2Eu8
+            ),
+        forall|k: int|
+            index <= k < domain.len() - 1
+                ==> !(#[trigger] domain[k] == 0x2Eu8
+                    && (domain[k + 1] == 0x2Eu8 || domain[k + 1] == 0x2Du8)),
+        forall|k: int|
+            index <= k < domain.len() - 1
+                ==> !(#[trigger] domain[k] == 0x2Du8 && domain[k + 1] == 0x2Eu8),
+        index < domain.len() ==> (
+            domain[domain.len() - 1] != 0x2Eu8
+                && domain[domain.len() - 1] != 0x2Du8
+        ),
+        index < domain.len() - 1 ==> domain[domain.len() - 2] != 0x2Eu8,
+    decreases domain.len() - index,
+{
+    if index < domain.len() {
+        let b: u8 = domain[index];
+        if b == 0x2Eu8 {
+            lemma_email_domain_labels_declarative_invariants(
+                domain,
+                index + 1,
+                dot_count + 1,
+                0,
+                false,
+                false,
+            );
+            assert(domain[index] == 0x2Eu8);
+        } else if is_ascii_alpha_byte_spec(b) {
+            lemma_email_domain_labels_declarative_invariants(
+                domain,
+                index + 1,
+                dot_count,
+                label_len + 1,
+                true,
+                false,
+            );
+            if dot_count == 0 {
+                let witness: int = choose|dot_idx: int|
+                    index + 1 <= dot_idx < domain.len() && #[trigger] domain[dot_idx] == 0x2Eu8;
+                assert(domain[witness] == 0x2Eu8);
+            }
+        } else if is_ascii_digit_byte_spec(b) {
+            lemma_email_domain_labels_declarative_invariants(
+                domain,
+                index + 1,
+                dot_count,
+                label_len + 1,
+                label_has_alpha,
+                false,
+            );
+            if dot_count == 0 {
+                let witness: int = choose|dot_idx: int|
+                    index + 1 <= dot_idx < domain.len() && #[trigger] domain[dot_idx] == 0x2Eu8;
+                assert(domain[witness] == 0x2Eu8);
+            }
+        } else {
+            lemma_email_domain_labels_declarative_invariants(
+                domain,
+                index + 1,
+                dot_count,
+                label_len + 1,
+                label_has_alpha,
+                true,
+            );
+            if dot_count == 0 {
+                let witness: int = choose|dot_idx: int|
+                    index + 1 <= dot_idx < domain.len() && #[trigger] domain[dot_idx] == 0x2Eu8;
+                assert(domain[witness] == 0x2Eu8);
+            }
+        }
+    }
+}
+
+/// 補題: `is_valid_email_domain_part_spec` を満たすドメイン部は宣言的構文制約（ドット存在・連続ドット不在・先頭末尾ハイフン不在・TLD 2文字以上）をすべて充足する
+pub proof fn lemma_valid_email_domain_declarative_properties(domain: Seq<u8>)
+    requires
+        is_valid_email_domain_part_spec(domain),
+    ensures
+        4 <= domain.len() <= INQUIRY_EMAIL_DOMAIN_MAX_CHARS as int,
+        domain[0] != 0x2Eu8 && domain[0] != 0x2Du8,
+        domain[domain.len() - 1] != 0x2Eu8 && domain[domain.len() - 1] != 0x2Du8,
+        domain[domain.len() - 2] != 0x2Eu8,
+        exists|dot_idx: int|
+            0 < dot_idx < domain.len() - 2 && #[trigger] domain[dot_idx] == 0x2Eu8,
+        forall|k: int|
+            0 <= k < domain.len() - 1
+                ==> !(#[trigger] domain[k] == 0x2Eu8
+                    && (domain[k + 1] == 0x2Eu8 || domain[k + 1] == 0x2Du8)),
+        forall|k: int|
+            0 <= k < domain.len() - 1
+                ==> !(#[trigger] domain[k] == 0x2Du8 && domain[k + 1] == 0x2Eu8),
+{
+    lemma_email_domain_labels_declarative_invariants(domain, 0, 0, 0, false, false);
+    let witness: int = choose|dot_idx: int|
+        0 <= dot_idx < domain.len() && #[trigger] domain[dot_idx] == 0x2Eu8;
+    assert(0 < witness && witness < domain.len() - 2);
+    assert(domain[witness] == 0x2Eu8);
+}
+
+/// 補題: `is_valid_email_local_part_spec` は連続ドット（`a..b`）を必ず拒否する
+pub proof fn lemma_consecutive_dots_rejected_in_local_part(local: Seq<u8>, dot_idx: int)
+    requires
+        0 <= dot_idx < local.len() - 1,
+        local[dot_idx] == 0x2Eu8,
+        local[dot_idx + 1] == 0x2Eu8,
+    ensures
+        !is_valid_email_local_part_spec(local),
+{
+}
 
 /// 補題: 空白のみ（または空）の入力は文字数超過であっても `Empty` が優先される
 pub proof fn lemma_empty_precedence_over_too_long(
@@ -1184,7 +1728,7 @@ mod kani_proofs {
     }
 
     /// 証明: 任意の生バイト列（最大 8 バイト）に対して `is_valid_email_syntax_bytes` が
-    /// パニックせず、成功時は `6..=254` バイトの印字可能 ASCII・単一 `@`・ドット規則を満たすこと
+    /// パニックせず、成功時は印字可能 ASCII・単一 `@`・ローカル部 `dot-atom` 規則・ドメイン部ラベル規則をすべて満たすこと
     #[kani::proof]
     #[kani::unwind(10)]
     fn proof_email_syntax_arbitrary_bytes_invariants() {
@@ -1198,16 +1742,67 @@ mod kani_proofs {
         if valid {
             assert!(len >= 6 && len <= INQUIRY_EMAIL_MAX_CHARS);
             let mut at_count: usize = 0;
+            let mut at_idx: usize = 0;
             let mut i: usize = 0;
             while i < len {
                 let b: u8 = slice[i];
                 assert!(0x21 <= b && b <= 0x7E);
                 if b == b'@' {
                     at_count += 1;
+                    at_idx = i;
+                }
+                if i + 1 < len {
+                    assert!(!(b == b'.' && slice[i + 1] == b'.'));
                 }
                 i += 1;
             }
             assert_eq!(at_count, 1);
+            assert!(at_idx >= 1 && at_idx + 4 < len);
+
+            let local: &[u8] = &slice[..at_idx];
+            assert!(local[0] != b'.' && local[local.len() - 1] != b'.');
+            let mut li: usize = 0;
+            while li < local.len() {
+                let lb: u8 = local[li];
+                assert!(is_email_atext_byte(lb) || lb == b'.');
+                li += 1;
+            }
+
+            let domain: &[u8] = &slice[at_idx + 1..];
+            assert!(domain.len() >= 4);
+            assert!(domain[0] != b'.' && domain[0] != b'-');
+            assert!(domain[domain.len() - 1] != b'.' && domain[domain.len() - 1] != b'-');
+            assert!(domain[domain.len() - 2] != b'.');
+
+            let mut dot_count: usize = 0;
+            let mut last_dot: usize = 0;
+            let mut di: usize = 0;
+            while di < domain.len() {
+                let db: u8 = domain[di];
+                assert!(
+                    is_ascii_alpha_byte(db) || is_ascii_digit_byte(db) || db == b'-' || db == b'.'
+                );
+                if db == b'.' {
+                    dot_count += 1;
+                    last_dot = di;
+                }
+                if di + 1 < domain.len() {
+                    assert!(!(db == b'.' && domain[di + 1] == b'-'));
+                    assert!(!(db == b'-' && domain[di + 1] == b'.'));
+                }
+                di += 1;
+            }
+            assert!(dot_count >= 1);
+            assert!(domain.len() - (last_dot + 1) >= 2);
+            let mut tld_has_alpha: bool = false;
+            let mut ti: usize = last_dot + 1;
+            while ti < domain.len() {
+                if is_ascii_alpha_byte(domain[ti]) {
+                    tld_has_alpha = true;
+                }
+                ti += 1;
+            }
+            assert!(tld_has_alpha);
         }
     }
 

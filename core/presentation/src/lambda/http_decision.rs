@@ -4,12 +4,18 @@
 //! エラーからHTTPステータスコード・公開メッセージへのサニタイズ変換）を、
 //! AWS SDK・Tokio・SeaORM等の外部クレートから完全に独立した Verified Core として提供する。
 //!
-//! ## 形式検証（Verus + Kani）
+//! ## 形式検証（Verus + Kani）と保証スコープ
 //!
 //! | ツール | 主な証明内容 |
 //! |---|---|
-//! | **Verus**（`--no-cheating`） | 任意長 `(method, path)` に対する CORS プリフライト（`OPTIONS`）最優先性、エンドポイント分離、単数/複数パス混同不在、HTTPステータス境界、インフラ詳細エラーの非漏洩（不可識別性） |
+//! | **Verus**（`--no-cheating`） | Lambda到達リクエストにおける任意長 `(method, path)` のルーティング全域性（既知パスの `OPTIONS` `204`・未知パスの `404`・単数/複数パス混同不在）、HTTPステータス境界、インフラ詳細エラーの非漏洩（不可識別性） |
 //! | **Kani** | `bytes_eq` と標準スライス比較の一致、`route_method_and_path` と標準文字列パターンマッチの同値性、公開エラーメッセージ文字列の検証 |
+//!
+//! > **デプロイ環境の境界に関する注記**:
+//! > AWS本番/ステージング環境（`api/template.yaml` の `AWS::Serverless::HttpApi`）では `CorsConfiguration` が有効であるため、
+//! > CORSプリフライト条件を満たす `OPTIONS` リクエストは未知パスを含め **API Gatewayエッジで自動応答** され、Lambdaハンドラーには到達しない。
+//! > 本モジュールの `OPTIONS` → `204` / 未知パス → `404` の形式的保証は、`sam local`・直接呼び出し・非プリフライト `OPTIONS` 等、
+//! > **Lambdaハンドラーに到達して処理されるリクエスト** を対象スコープとする。
 //!
 //! ## フロー
 //!
@@ -380,15 +386,18 @@ pub fn is_inquiries_path(path: &[u8]) -> bool {
     matched
 }
 
-/// HTTPメソッドとパスのバイト列からルートを決定する
+/// HTTPメソッドとパスのバイト列からルートを決定する（Lambdaハンドラー到達リクエスト対象）
 ///
-/// ## 優先順位と不変条件（RFC 9110 準拠）
+/// ## 優先順位と不変条件（RFC 9110 準拠・Lambdaハンドラー内）
 ///
 /// 1. 未定義パス（`/api/v1/inquiry`・`/api/v1/inquiries` 以外）はメソッドによらず常に `Route::NotFound`（404）
 /// 2. 既知APIパスに対する `OPTIONS` は常に `Route::Options`（204 No Content）
 /// 3. `POST /api/v1/inquiry` のみ `Route::CreateInquiry`
 /// 4. `GET /api/v1/inquiries` のみ `Route::FindInquiries`（501）
 /// 5. 既知APIパスに対する上記以外のメソッドは `Route::MethodNotAllowed`（405）
+///
+/// ※AWS API Gateway HTTP API（`CorsConfiguration` 有効時）では、CORSプリフライト `OPTIONS` は
+/// エッジで自動応答されるため、上記1・2の `OPTIONS` 判定はLambdaへ転送されたリクエスト（`sam local` や非プリフライト `OPTIONS` 等）に対して適用される。
 #[cfg_attr(verus_keep_ghost, verus_builtin_macros::verus_spec(res =>
     ensures
         res == Route::NotFound <==> !is_known_api_path_spec(path@),
